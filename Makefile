@@ -2,9 +2,31 @@
 # Main
 ################################################################################
 .PHONY: test
-test: ## test
-	@#op read 'op://Personal/**********/password'
-	@./op-cache.sh read 'op://Personal/*******/password'
+test: ## キャッシュ読み取りをテスト (op read のキャッシュ動作確認)
+	@./op-cache.sh read 'op://Test/test02/password'
+	@./op-cache.sh read 'op://Test/i4rypq4trhjhki7sebzt3zhxwy/password'
+	@./op-cache.sh read 'op://Test/d37fevxavo5ddlqh62hbyecfc4/password'
+	@./op-cache.sh read 'op://Test/ulqdvp7ovsk4rt4xhv3wu2ydum/password'
+
+.PHONY: list
+list: ## キャッシュ一覧を表示
+	@./op-cache.sh list
+
+.PHONY: clear
+clear: ## キャッシュを全削除 (op-cache clear)
+	@./op-cache.sh clear
+
+.PHONY: refresh
+refresh: ## 全キャッシュを再取得 (op-cache refresh)
+	@./op-cache.sh refresh
+
+.PHONY: status
+status: ## キーチェーンの状態を表示 (IDLE_TIMEOUT・ロック状態・エントリ数)
+	@./op-cache.sh status
+
+.PHONY: update-idle-timeout
+update-idle-timeout: ## 自動ロックまでの時間を変更 (例: make update-idle-timeout SECONDS=1800)
+	@./op-cache.sh update-idle-timeout '$(SECONDS)'
 
 ################################################################################
 # Tool
@@ -16,16 +38,15 @@ GROUP_ID := $(shell id -g)
 # https://hub.docker.com/r/mvdan/shfmt/dockerfile
 SHFMT_VERSION := v3.12.0
 .PHONY: fmt-sh
-fmt-sh: ## scripts/以下をformat
-	@docker run --rm -it -u "${USER_ID}:${GROUP_ID}" --mount type=bind,source=${PWD}/scripts/,target=/scripts/ -w /scripts mvdan/shfmt:${SHFMT_VERSION} -i 2 -w .
+fmt-sh: ## op-cache.sh を shfmt でフォーマット
+	@docker run --rm -it -u "${USER_ID}:${GROUP_ID}" --mount type=bind,source=${PWD},target=/work -w /work mvdan/shfmt:${SHFMT_VERSION} -i 2 -w op-cache.sh
 
 # docker: koalaman/shellcheck は作者製
 # https://hub.docker.com/r/koalaman/shellcheck
 SHELLCHECK_VERSION := v0.11.0
 .PHONY: lint-sh
-lint-sh: ## format
-	$(eval SH_FILES := $(shell ls -1 scripts/*.sh | xargs basename))
-	@docker run --rm -it -u "${USER_ID}:${GROUP_ID}" --mount type=bind,source=${PWD}/scripts/,target=/scripts/ -w /scripts koalaman/shellcheck:${SHELLCHECK_VERSION} ${SH_FILES}
+lint-sh: ## op-cache.sh を shellcheck で lint
+	@docker run --rm -it -u "${USER_ID}:${GROUP_ID}" --mount type=bind,source=${PWD},target=/work -w /work koalaman/shellcheck:${SHELLCHECK_VERSION} op-cache.sh
 
 ################################################################################
 # Utility-Command help
