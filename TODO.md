@@ -1,6 +1,6 @@
 # TODO
 
-## `op-cache prune` サブコマンドの追加
+## `op-keychain prune` サブコマンドの追加
 
 1Password に存在しない ref のキャッシュエントリを削除するサブコマンド。
 

@@ -3,30 +3,30 @@
 ################################################################################
 .PHONY: test
 test: ## キャッシュ読み取りをテスト (op read のキャッシュ動作確認)
-	@./op-cache.sh read 'op://Test/test02/password'
-	@./op-cache.sh read 'op://Test/i4rypq4trhjhki7sebzt3zhxwy/password'
-	@./op-cache.sh read 'op://Test/d37fevxavo5ddlqh62hbyecfc4/password'
-	@./op-cache.sh read 'op://Test/ulqdvp7ovsk4rt4xhv3wu2ydum/password'
+	@./op-keychain.sh read 'op://Test/test02/password'
+	@./op-keychain.sh read 'op://Test/i4rypq4trhjhki7sebzt3zhxwy/password'
+	@./op-keychain.sh read 'op://Test/d37fevxavo5ddlqh62hbyecfc4/password'
+	@./op-keychain.sh read 'op://Test/ulqdvp7ovsk4rt4xhv3wu2ydum/password'
 
 .PHONY: list
 list: ## キャッシュ一覧を表示
-	@./op-cache.sh list
+	@./op-keychain.sh list
 
 .PHONY: clear
-clear: ## キャッシュを全削除 (op-cache clear)
-	@./op-cache.sh clear
+clear: ## キャッシュを全削除 (op-keychain clear)
+	@./op-keychain.sh clear
 
 .PHONY: refresh
-refresh: ## 全キャッシュを再取得 (op-cache refresh)
-	@./op-cache.sh refresh
+refresh: ## 全キャッシュを再取得 (op-keychain refresh)
+	@./op-keychain.sh refresh
 
 .PHONY: status
 status: ## キーチェーンの状態を表示 (IDLE_TIMEOUT・ロック状態・エントリ数)
-	@./op-cache.sh status
+	@./op-keychain.sh status
 
 .PHONY: update-idle-timeout
 update-idle-timeout: ## 自動ロックまでの時間を変更 (例: make update-idle-timeout SECONDS=1800)
-	@./op-cache.sh update-idle-timeout '$(SECONDS)'
+	@./op-keychain.sh update-idle-timeout '$(SECONDS)'
 
 ################################################################################
 # Tool
@@ -38,15 +38,15 @@ GROUP_ID := $(shell id -g)
 # https://hub.docker.com/r/mvdan/shfmt/dockerfile
 SHFMT_VERSION := v3.12.0
 .PHONY: fmt-sh
-fmt-sh: ## op-cache.sh を shfmt でフォーマット
-	@docker run --rm -it -u "${USER_ID}:${GROUP_ID}" --mount type=bind,source=${PWD},target=/work -w /work mvdan/shfmt:${SHFMT_VERSION} -i 2 -w op-cache.sh
+fmt-sh: ## op-keychain.sh を shfmt でフォーマット
+	@docker run --rm -it -u "${USER_ID}:${GROUP_ID}" --mount type=bind,source=${PWD},target=/work -w /work mvdan/shfmt:${SHFMT_VERSION} -i 2 -w op-keychain.sh
 
 # docker: koalaman/shellcheck は作者製
 # https://hub.docker.com/r/koalaman/shellcheck
 SHELLCHECK_VERSION := v0.11.0
 .PHONY: lint-sh
-lint-sh: ## op-cache.sh を shellcheck で lint
-	@docker run --rm -it -u "${USER_ID}:${GROUP_ID}" --mount type=bind,source=${PWD},target=/work -w /work koalaman/shellcheck:${SHELLCHECK_VERSION} op-cache.sh
+lint-sh: ## op-keychain.sh を shellcheck で lint
+	@docker run --rm -it -u "${USER_ID}:${GROUP_ID}" --mount type=bind,source=${PWD},target=/work -w /work koalaman/shellcheck:${SHELLCHECK_VERSION} op-keychain.sh
 
 ################################################################################
 # Utility-Command help

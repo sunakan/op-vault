@@ -1,4 +1,4 @@
-<h1 align="center">op-cache</h1>
+<h1 align="center">op-keychain</h1>
 <p align="center"><code>op read</code>（1Password CLI）の結果を macOS キーチェーンにキャッシュするラッパースクリプト。</p>
 
 <p align="center">
@@ -20,8 +20,8 @@
 
 ```bash
 mkdir -p ~/.local/bin
-curl -o ~/.local/bin/op-cache https://raw.githubusercontent.com/sunakan/op-cache/main/op-cache.sh
-chmod +x ~/.local/bin/op-cache
+curl -o ~/.local/bin/op-keychain https://raw.githubusercontent.com/sunakan/op-keychain/main/op-keychain.sh
+chmod +x ~/.local/bin/op-keychain
 ```
 
 `~/.local/bin` が `PATH` に含まれているか確認（含まれていなければ `~/.zshrc` に追加）:
@@ -33,48 +33,48 @@ export PATH="$HOME/.local/bin:$PATH"
 以降はどこからでも使えます:
 
 ```bash
-op-cache read 'op://vault/item/field'
+op-keychain read 'op://vault/item/field'
 ```
 
 ### リポジトリをクローン
 
 ```bash
-git clone https://github.com/sunakan/op-cache.git
-cd op-cache
-./op-cache.sh read 'op://vault/item/field'
+git clone https://github.com/sunakan/op-keychain.git
+cd op-keychain
+./op-keychain.sh read 'op://vault/item/field'
 ```
 
 ## 使い方
 
 ```bash
-op-cache read <op://vault/item/field>   # キャッシュ付きで値を読み取る
-op-cache remove <op://...>              # 指定エントリを削除
-op-cache clear                          # キャッシュ全削除
-op-cache list                           # キャッシュ一覧を表示
-op-cache refresh                        # 全キャッシュを再取得
-op-cache status                         # キーチェーンの状態を表示
-op-cache update-idle-timeout <秒数>     # 自動ロックまでの時間を変更
+op-keychain read <op://vault/item/field>   # キャッシュ付きで値を読み取る
+op-keychain remove <op://...>              # 指定エントリを削除
+op-keychain clear                          # キャッシュ全削除
+op-keychain list                           # キャッシュ一覧を表示
+op-keychain refresh                        # 全キャッシュを再取得
+op-keychain status                         # キーチェーンの状態を表示
+op-keychain update-idle-timeout <秒数>     # 自動ロックまでの時間を変更
 ```
 
 ### 例
 
 ```bash
 # 初回: 1Password から取得してキャッシュ
-./op-cache.sh read 'op://Personal/GitHub/token'
+./op-keychain.sh read 'op://Personal/GitHub/token'
 
 # 2回目以降: キャッシュから即座に返す（1Password への通信なし）
-./op-cache.sh read 'op://Personal/GitHub/token'
+./op-keychain.sh read 'op://Personal/GitHub/token'
 ```
 
 ## 仕組み
 
-専用のキーチェーン（`~/Library/Keychains/op-cache.keychain-db`）にシークレットを保存する。
+専用のキーチェーン（`~/Library/Keychains/op-keychain.keychain-db`）にシークレットを保存する。
 
 **キャッシュヒット**: キーチェーンがアンロック中かつエントリが存在する場合、1Password に通信せずに即座に値を返す。
 
 **キャッシュミス**: キーチェーンがロック中（IDLE_TIMEOUT 超過）またはエントリが未キャッシュの場合、`op read` で 1Password から取得してキーチェーンに保存してから返す。
 
-キーチェーンの非アクティブ自動ロックがキャッシュ期限として機能する。`op-cache read` を呼ばない状態が `IDLE_TIMEOUT` 秒続くとキーチェーンが自動ロックされ、次回は 1Password から再取得する。
+キーチェーンの非アクティブ自動ロックがキャッシュ期限として機能する。`op-keychain read` を呼ばない状態が `IDLE_TIMEOUT` 秒続くとキーチェーンが自動ロックされ、次回は 1Password から再取得する。
 
 各エントリは元の ref・アイテム名・値を含む JSON として保存される:
 
@@ -88,13 +88,13 @@ op-cache update-idle-timeout <秒数>     # 自動ロックまでの時間を変
 
 | 環境変数 | デフォルト | 説明 |
 |---|---|---|
-| `OP_CACHE_IDLE_TIMEOUT` | `3600` | 非アクティブ自動ロックまでの秒数（キーチェーン作成時のみ適用） |
-| `OP_CACHE_DEBUG` | （未設定） | `true` または `1` でデバッグ出力を有効化（`set -x`） |
+| `OP_KEYCHAIN_IDLE_TIMEOUT` | `3600` | 非アクティブ自動ロックまでの秒数（キーチェーン作成時のみ適用） |
+| `OP_KEYCHAIN_DEBUG` | （未設定） | `true` または `1` でデバッグ出力を有効化（`set -x`） |
 
 キーチェーン作成後に IDLE_TIMEOUT を変更するには `update-idle-timeout` を使う:
 
 ```bash
-./op-cache.sh update-idle-timeout 1800  # 30分
+./op-keychain.sh update-idle-timeout 1800  # 30分
 ```
 
 ## キーチェーンのパスワード
@@ -102,7 +102,7 @@ op-cache update-idle-timeout <秒数>     # 自動ロックまでの時間を変
 初回実行時にキーチェーンにパスワードを設定するか確認される:
 
 ```
-op-cache: キーチェーンにパスワードを設定しますか？ [y/N (default: N)]:
+op-keychain: キーチェーンにパスワードを設定しますか？ [y/N (default: N)]:
 ```
 
 デフォルト（パスワードなし）ではアンロック時にプロンプトが表示されない。パスワードを設定した場合、キャッシュミス時にアンロックプロンプトが表示される。
@@ -110,16 +110,8 @@ op-cache: キーチェーンにパスワードを設定しますか？ [y/N (def
 ## デバッグ
 
 ```bash
-OP_CACHE_DEBUG=true ./op-cache.sh read 'op://Test/test02/password'
+OP_KEYCHAIN_DEBUG=true ./op-keychain.sh read 'op://Test/test02/password'
 ```
-
-## op-fast との比較
-
-[op-fast](https://github.com/cometkim/op-fast) は `op` コマンド全体を置き換えるプロキシ（read/inject/run 対応）で、LMDB + OS キーリングの二層構造と glob パターンによるシークレット単位の TTL 設定が特徴。
-
-op-cache は意図的に狭いスコープに絞っている。`op read` のラッパーに特化し、すべてを macOS キーチェーンに保存し、キーチェーンの IDLE_TIMEOUT をそのまま有効期限として使う。設定ファイルも `jq` 以外の追加依存もない。
-
-詳細は [DIFF_OTHER_TOOL.md](./DIFF_OTHER_TOOL.md) を参照。
 
 ## ライセンス
 

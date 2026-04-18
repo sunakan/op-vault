@@ -2,7 +2,7 @@
 
 ## 概要
 
-`op read`（1Password CLI）は毎回 1Password サーバーへの通信が発生するため低速。`op-cache` は結果を macOS キーチェーンにキャッシュし、IDLE_TIMEOUT 内にアクセスが続く限り `op read` を呼ばずに即座に値を返す。
+`op read`（1Password CLI）は毎回 1Password サーバーへの通信が発生するため低速。`op-keychain` は結果を macOS キーチェーンにキャッシュし、IDLE_TIMEOUT 内にアクセスが続く限り `op read` を呼ばずに即座に値を返す。
 
 ---
 
@@ -12,18 +12,18 @@
 
 - 不明なサブコマンド・引数なし: 下記 usage を **stdout** に出力して終了コード 0
   ```
-  usage: op-cache read                 <op://...>  # キャッシュ付きで値を読み取る
-         op-cache remove               <op://...>  # 指定エントリを削除
-         op-cache clear                            # キャッシュ全削除
-         op-cache list                             # キャッシュ一覧を表示
-         op-cache refresh                          # 全キャッシュを再取得
-         op-cache status                           # キーチェーンの状態を表示
-         op-cache update-idle-timeout  <秒数>      # 自動ロックまでの時間を変更
+  usage: op-keychain read                 <op://...>  # キャッシュ付きで値を読み取る
+         op-keychain remove               <op://...>  # 指定エントリを削除
+         op-keychain clear                            # キャッシュ全削除
+         op-keychain list                             # キャッシュ一覧を表示
+         op-keychain refresh                          # 全キャッシュを再取得
+         op-keychain status                           # キーチェーンの状態を表示
+         op-keychain update-idle-timeout  <秒数>      # 自動ロックまでの時間を変更
   ```
 
 ---
 
-### `op-cache read <op://vault/item[/field]>`
+### `op-keychain read <op://vault/item[/field]>`
 
 キャッシュヒット時はキーチェーンから値を返す。ミス時は `op read` で取得してキャッシュに保存してから返す。
 
@@ -31,7 +31,7 @@
 
 | 条件 | 動作 | stdout | stderr | 終了コード |
 |------|------|--------|--------|-----------|
-| `<ref>` 引数なし | 即終了 | なし | `usage: op-cache read <op://...>` | 1 |
+| `<ref>` 引数なし | 即終了 | なし | `usage: op-keychain read <op://...>` | 1 |
 | キャッシュヒット（アンロック中かつエントリあり） | キャッシュから値を返す。`op read` は呼ばない | 値（改行なし） | なし | 0 |
 | キャッシュミス（ロック中または未キャッシュ）、`op read` 成功 | `op read` で取得 → アイテム名取得 → 保存 → 値を返す | 値（改行なし） | なし | 0 |
 | キャッシュミス、`op read` 失敗 | 即終了 | なし | `error: op read に失敗しました: <ref>` | 1 |
@@ -53,7 +53,7 @@
 
 ---
 
-### `op-cache list`
+### `op-keychain list`
 
 キャッシュされている ref の一覧を表示する。
 
@@ -74,7 +74,7 @@
 
 ---
 
-### `op-cache refresh`
+### `op-keychain refresh`
 
 キャッシュ済みの全 ref を `op read` で再取得し、キーチェーンを更新する。
 
@@ -120,20 +120,20 @@
 
 ---
 
-### `op-cache remove <op://vault/item[/field]>`
+### `op-keychain remove <op://vault/item[/field]>`
 
 指定した ref のエントリのみキーチェーンから削除する。
 
 | 条件 | 動作 | stdout | stderr | 終了コード |
 |------|------|--------|--------|-----------|
-| `<ref>` 引数なし | 即終了 | なし | `usage: op-cache remove <op://...>` | 1 |
+| `<ref>` 引数なし | 即終了 | なし | `usage: op-keychain remove <op://...>` | 1 |
 | キーチェーンファイルが存在しない | 即終了 | なし | `キャッシュなし` | 1 |
 | エントリが存在する（アンロック中） | 削除成功 | `削除しました: <ref>` | なし | 0 |
 | エントリが存在する（ロック中） | アンロック後に削除 | `削除しました: <ref>` | なし | 0 |
 | エントリが存在しない | 即終了 | なし | `error: キャッシュが見つかりません: <ref>` | 1 |
 
 **フロー:**
-1. `<ref>` 引数なし: `usage: op-cache remove <op://...>` を stderr に出力して終了コード 1
+1. `<ref>` 引数なし: `usage: op-keychain remove <op://...>` を stderr に出力して終了コード 1
 2. キーチェーンファイルが存在しない: `キャッシュなし` を stderr に出力して終了コード 1
 3. アンロックせずに `security delete-generic-password -a <USER> -s <service> <keychain>` を試みる
    - 成功: `削除しました: <ref>` を stdout に出力して終了コード 0
@@ -142,7 +142,7 @@
 
 ---
 
-### `op-cache status`
+### `op-keychain status`
 
 キーチェーンの現在の状態を表示する。アンロック操作は行わない。
 
@@ -155,7 +155,7 @@
 
 **出力例（アンロック中）:**
 ```
-キーチェーン: あり (/Users/user/Library/Keychains/op-cache.keychain-db)
+キーチェーン: あり (/Users/user/Library/Keychains/op-keychain.keychain-db)
 IDLE_TIMEOUT: 3600秒
 ロック状態:   アンロック中
 エントリ数:   3件
@@ -170,7 +170,7 @@ IDLE_TIMEOUT: 3600秒
    - `timeout=Ns`（N > 0）: `IDLE_TIMEOUT: N秒` を出力
    - `timeout=` が見つからない: `IDLE_TIMEOUT: 不明` を出力
 4. `security dump-keychain <keychain>`（ロック中でも動作）でサービス名を列挙
-5. `op-cache:` プレフィックスを持つサービス名の件数を取得
+5. `op-keychain:` プレフィックスを持つサービス名の件数を取得
    - 0件: `エントリ数: 0件` を出力して終了
 6. 最初のサービス名に対して `security find-generic-password -a <USER> -s <service> -w <keychain>` を試みる（副作用なし）
    - 成功（アンロック中）: `ロック状態: アンロック中` + `エントリ数: N件` を出力
@@ -178,19 +178,19 @@ IDLE_TIMEOUT: 3600秒
 
 ---
 
-### `op-cache update-idle-timeout <秒数>`
+### `op-keychain update-idle-timeout <秒数>`
 
 キーチェーンの非アクティブ自動ロックまでの時間を変更する。
 
 | 条件 | stdout | stderr | 終了コード |
 |------|--------|--------|-----------|
-| `<秒数>` 引数なし | なし | `usage: op-cache update-idle-timeout <秒数>` | 1 |
+| `<秒数>` 引数なし | なし | `usage: op-keychain update-idle-timeout <秒数>` | 1 |
 | `<秒数>` が正の整数でない | なし | `error: 秒数は正の整数で指定してください: <値>` | 1 |
 | キーチェーンファイルが存在しない | なし | `キャッシュなし` | 1 |
 | 成功 | `idle-timeout を <秒数>秒 に設定しました` | なし | 0 |
 
 **フロー:**
-1. 引数なし: `usage: op-cache update-idle-timeout <秒数>` を stderr に出力して終了コード 1
+1. 引数なし: `usage: op-keychain update-idle-timeout <秒数>` を stderr に出力して終了コード 1
 2. 正の整数でない場合: エラーを stderr に出力して終了コード 1
 3. キーチェーンファイルが存在しない: `キャッシュなし` を stderr に出力して終了コード 1
 4. `security set-keychain-settings -t <秒数> <keychain>` を実行
@@ -198,7 +198,7 @@ IDLE_TIMEOUT: 3600秒
 
 ---
 
-### `op-cache clear`
+### `op-keychain clear`
 
 キーチェーン全体を削除する。
 
@@ -216,10 +216,10 @@ IDLE_TIMEOUT: 3600秒
 
 ## データ形式
 
-- **キーチェーンファイル**: `~/Library/Keychains/op-cache.keychain-db`
-- **サービス名**: `op-cache:<SHA256(ref)>` の lowercase hex 文字列（64文字）
+- **キーチェーンファイル**: `~/Library/Keychains/op-keychain.keychain-db`
+- **サービス名**: `op-keychain:<SHA256(ref)>` の lowercase hex 文字列（64文字）
   - ref を SHA256 ハッシュ化することで UUID・スラッシュ・日本語等を含む任意の ref を安全に扱う
-  - 例: `"op://vault/item/field"` の SHA256 → `op-cache:7f42d594...`
+  - 例: `"op://vault/item/field"` の SHA256 → `op-keychain:7f42d594...`
 - **アカウント名**: 実行ユーザー名（`$USER` / `os.Getenv("USER")`）
 - **パスワード値**: 以下の JSON 文字列（**純 ASCII 必須**）
 
@@ -303,16 +303,16 @@ ref から 1Password アイテム名（タイトル）を取得する。
 1. `security dump-keychain <keychain>`（`-d` なし）を実行して属性のみ取得
    出力例（エントリ1件分）:
    ```
-   keychain: "/Users/user/Library/Keychains/op-cache.keychain-db"
+   keychain: "/Users/user/Library/Keychains/op-keychain.keychain-db"
    version: 512
    class: 0x00000010
    attributes:
-       0x00000007 <blob>="op-cache:7f42d594..."
+       0x00000007 <blob>="op-keychain:7f42d594..."
        "acct"<blob>="username"
-       "svce"<blob>="op-cache:7f42d594..."
+       "svce"<blob>="op-keychain:7f42d594..."
        ...
    ```
-2. 出力から `"svce"<blob>="op-cache:` を含む行を抽出し、`op-cache:[0-9a-f]+` パターンでサービス名を取得する
+2. 出力から `"svce"<blob>="op-keychain:` を含む行を抽出し、`op-keychain:[0-9a-f]+` パターンでサービス名を取得する
    - `0x00000007 <blob>` 行も同じ値を持つが、`"svce"` 行のみを使う（重複排除）
 3. 各サービス名に対して `security find-generic-password -a <USER> -s <service> -w <keychain>` で JSON を取得
 
@@ -320,22 +320,22 @@ ref から 1Password アイテム名（タイトル）を取得する。
 
 ### サービス名生成
 
-`<ref>` → `op-cache:<SHA256(ref) lowercase hex>` に変換する。
+`<ref>` → `op-keychain:<SHA256(ref) lowercase hex>` に変換する。
 
 - SHA256 は ref 文字列のバイト列に対して計算する（末尾改行なし）
-- 例: `"op://Test/test02/password"` → `op-cache:7f42d594...`（64文字）
+- 例: `"op://Test/test02/password"` → `op-keychain:7f42d594...`（64文字）
 
 ---
 
 ## キーチェーン初期化
 
-`op-cache read` 実行時にキーチェーンファイルが存在しない場合に一度だけ実行される。
+`op-keychain read` 実行時にキーチェーンファイルが存在しない場合に一度だけ実行される。
 
-1. `/dev/tty` を直接開いてプロンプトを表示: `op-cache: キーチェーンにパスワードを設定しますか？ [y/N (default: N)]: `
+1. `/dev/tty` を直接開いてプロンプトを表示: `op-keychain: キーチェーンにパスワードを設定しますか？ [y/N (default: N)]: `
    - `N`（デフォルト）: 空パスワードで作成。以降のアンロックはプロンプトなし
    - `Y`: パスワードを入力・確認。不一致の場合はエラー終了（`error: パスワードが一致しません`）
    - プロンプトへの入出力は `/dev/tty` 経由で行うこと（stdout/stderr がリダイレクトされていても動作するように）
-2. `security create-keychain -p "<password>" op-cache.keychain` でキーチェーンを作成
+2. `security create-keychain -p "<password>" op-keychain.keychain` でキーチェーンを作成
 3. `security set-keychain-settings -t <IDLE_TIMEOUT> <keychain>` で非アクティブ自動ロックを設定
 4. 既存のキーチェーンリストを取得: `security list-keychains -d user`
    - 出力形式: 各行が `    "/path/to/keychain"` のようにインデントとダブルクォートを含む
@@ -348,10 +348,10 @@ ref から 1Password アイテム名（タイトル）を取得する。
 
 macOS キーチェーンの「非アクティブ自動ロック」機能を利用する。
 
-- デフォルト IDLE_TIMEOUT: **3600 秒（1時間）**。環境変数 `OP_CACHE_IDLE_TIMEOUT` で初期値を変更可能。作成後は `op-cache update-idle-timeout <秒数>` で変更可能
+- デフォルト IDLE_TIMEOUT: **3600 秒（1時間）**。環境変数 `OP_KEYCHAIN_IDLE_TIMEOUT` で初期値を変更可能。作成後は `op-keychain update-idle-timeout <秒数>` で変更可能
 - **キャッシュヒット時**: キーチェーンをアンロックしないためタイマーはリセットされない
 - **キャッシュミス時**: キーチェーンがロック中の場合のみアンロックして保存するためタイマーがリセットされる
-- `op-cache read` を呼ばない状態が IDLE_TIMEOUT 秒続くとキーチェーンが自動ロックされ、次回は `op read` が走る
+- `op-keychain read` を呼ばない状態が IDLE_TIMEOUT 秒続くとキーチェーンが自動ロックされ、次回は `op read` が走る
 
 ---
 
@@ -372,7 +372,7 @@ macOS キーチェーン（`.keychain-db`）は SQLite3（WAL モード）で実
 - セッションは子プロセスに**引き継がれる**
 - セッション未確立時に並行 `op read` を実行すると、各プロセスが独立して認証ダイアログを表示する
 
-`op-cache refresh` での対策:
+`op-keychain refresh` での対策:
 1. `op whoami` でセッション確認（stdout/stderr は捨てる）
    - 終了コード 0: セッション確立済み → そのまま並行実行へ
    - 終了コード 非ゼロ: セッション未確立 → 次のステップへ
@@ -396,5 +396,5 @@ macOS キーチェーン（`.keychain-db`）は SQLite3（WAL モード）で実
 
 | 変数 | デフォルト | 説明 |
 |------|-----------|------|
-| `OP_CACHE_IDLE_TIMEOUT` | `3600` | キーチェーン非アクティブ自動ロックまでの秒数（初回キーチェーン作成時のみ適用） |
-| `OP_CACHE_DEBUG` | （未設定） | `true` または `1` でデバッグ出力を有効化（bash では `set -x`、他言語では stderr への詳細ログ出力） |
+| `OP_KEYCHAIN_IDLE_TIMEOUT` | `3600` | キーチェーン非アクティブ自動ロックまでの秒数（初回キーチェーン作成時のみ適用） |
+| `OP_KEYCHAIN_DEBUG` | （未設定） | `true` または `1` でデバッグ出力を有効化（bash では `set -x`、他言語では stderr への詳細ログ出力） |

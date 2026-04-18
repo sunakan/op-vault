@@ -4,8 +4,8 @@ set -eu -o pipefail
 # -u: 未定義変数の参照をエラーとして扱う
 # -o pipefail: パイプ途中のコマンド失敗をパイプライン全体の失敗として扱う
 
-# デバッグモード: OP_CACHE_DEBUG=true または 1 で set -x を有効化
-if [[ "${OP_CACHE_DEBUG:-}" == "true" || "${OP_CACHE_DEBUG:-}" == "1" ]]; then
+# デバッグモード: OP_KEYCHAIN_DEBUG=true または 1 で set -x を有効化
+if [[ "${OP_KEYCHAIN_DEBUG:-}" == "true" || "${OP_KEYCHAIN_DEBUG:-}" == "1" ]]; then
   set -x
 fi
 
@@ -14,14 +14,14 @@ fi
 # ============================================================
 
 # macOS キーチェーンの名前とパス
-readonly KEYCHAIN_NAME="op-cache"
+readonly KEYCHAIN_NAME="op-keychain"
 readonly KEYCHAIN="$HOME/Library/Keychains/${KEYCHAIN_NAME}.keychain-db"
 
 # 非アクティブ状態が続いた場合にキーチェーンが自動ロックされるまでの時間(秒)
 # デフォルト 1 時間
 # キャッシュミスでキーチェーンをアンロックするとタイマーがリセットされる
 # キャッシュヒット時はアンロックしないためタイマーはリセットされない
-readonly IDLE_TIMEOUT="${OP_CACHE_IDLE_TIMEOUT:-3600}"
+readonly IDLE_TIMEOUT="${OP_KEYCHAIN_IDLE_TIMEOUT:-3600}"
 
 # ============================================================
 # 内部ユーティリティ
@@ -33,7 +33,7 @@ readonly IDLE_TIMEOUT="${OP_CACHE_IDLE_TIMEOUT:-3600}"
 _service() {
   local hash
   hash=$(printf '%s' "$1" | shasum -a 256 | cut -d' ' -f1)
-  echo "op-cache:${hash}"
+  echo "op-keychain:${hash}"
 }
 
 # キーチェーンを初期化する (存在しない場合のみ作成する)
@@ -43,7 +43,7 @@ _init_keychain() {
   # パスワードを設定するか確認する (/dev/tty 経由でターミナルに直接出力)
   # デフォルトは空パスワード (プロンプトなしでアンロック可能)
   local password=""
-  printf 'op-cache: キーチェーンにパスワードを設定しますか？ [y/N (default: N)]: ' >/dev/tty
+  printf 'op-keychain: キーチェーンにパスワードを設定しますか？ [y/N (default: N)]: ' >/dev/tty
   local answer
   read -r answer </dev/tty
   if [[ "$answer" =~ ^[Yy]$ ]]; then
@@ -104,7 +104,7 @@ _dump_entries() {
     ref=$(jq -r '.ref' <<<"$json" 2>/dev/null) || continue
     name=$(jq -r '.name // ""' <<<"$json" 2>/dev/null) || true
     printf '%s\t%s\n' "$name" "$ref"
-  done < <(printf '%s\n' "$dump" | grep '"svce"<blob>="op-cache:' | grep -o 'op-cache:[0-9a-f]*')
+  done < <(printf '%s\n' "$dump" | grep '"svce"<blob>="op-keychain:' | grep -o 'op-keychain:[0-9a-f]*')
 }
 
 # キャッシュ済みの ref 一覧を標準出力に1行ずつ出力する
@@ -127,7 +127,7 @@ _item_name() {
 # サブコマンド
 # ============================================================
 
-# op-cache read <op://vault/item[/field]>
+# op-keychain read <op://vault/item[/field]>
 #
 # キャッシュヒット: キーチェーンがアンロック中かつ値が存在する場合に返す
 # キャッシュミス: キーチェーンがロック中 (IDLE_TIMEOUT超過) または未キャッシュの場合に
@@ -142,11 +142,11 @@ _item_name() {
 #   キャッシュヒット時: アンロックしないためタイマーはリセットされない
 #   キャッシュミス時: まずアンロックなしで保存を試みる
 #                   キーチェーンがロック中の場合のみアンロック → タイマーがリセットされる
-#   → op-cache read を呼ばない状態が IDLE_TIMEOUT 秒続くとキーチェーンが自動ロックされる
+#   → op-keychain read を呼ばない状態が IDLE_TIMEOUT 秒続くとキーチェーンが自動ロックされる
 cmd_read() {
   local ref="${1:-}"
   if [[ -z "$ref" ]]; then
-    echo "usage: op-cache read <op://...>" >&2
+    echo "usage: op-keychain read <op://...>" >&2
     return 1
   fi
 
@@ -199,7 +199,7 @@ cmd_read() {
   printf '%s' "$value"
 }
 
-# op-cache clear
+# op-keychain clear
 #
 # キーチェーン全体を削除する
 cmd_clear() {
@@ -211,13 +211,13 @@ cmd_clear() {
   echo "全キャッシュをクリアしました"
 }
 
-# op-cache remove <op://vault/item[/field]>
+# op-keychain remove <op://vault/item[/field]>
 #
 # 指定した ref のキャッシュエントリのみ削除する
 cmd_remove() {
   local ref="${1:-}"
   if [[ -z "$ref" ]]; then
-    echo "usage: op-cache remove <op://...>" >&2
+    echo "usage: op-keychain remove <op://...>" >&2
     return 1
   fi
 
@@ -240,7 +240,7 @@ cmd_remove() {
   echo "削除しました: $ref"
 }
 
-# op-cache list
+# op-keychain list
 #
 # キーチェーンに保存されているエントリを列挙する
 # キーチェーンがロック中 (IDLE_TIMEOUT超過) の場合はアンロック (プロンプト) してから一覧表示する
@@ -267,7 +267,7 @@ cmd_list() {
   fi
 }
 
-# op-cache refresh
+# op-keychain refresh
 #
 # キャッシュ済みの全 ref を再取得してキーチェーンを更新する
 #
@@ -350,13 +350,13 @@ cmd_refresh() {
   printf '完了: %d 件更新, %d 件失敗\n' "$ok" "$fail"
 }
 
-# op-cache update-idle-timeout <秒数>
+# op-keychain update-idle-timeout <秒数>
 #
 # キーチェーンの非アクティブ自動ロックまでの時間を変更する
 cmd_update_idle_timeout() {
   local seconds="${1:-}"
   if [[ -z "$seconds" ]]; then
-    echo "usage: op-cache update-idle-timeout <秒数>" >&2
+    echo "usage: op-keychain update-idle-timeout <秒数>" >&2
     return 1
   fi
   if [[ ! "$seconds" =~ ^[0-9]+$ ]]; then
@@ -373,7 +373,7 @@ cmd_update_idle_timeout() {
   echo "idle-timeout を ${seconds}秒 に設定しました"
 }
 
-# op-cache status
+# op-keychain status
 #
 # キーチェーンの状態（IDLE_TIMEOUT・ロック状態・エントリ数）を表示する
 #
@@ -407,7 +407,7 @@ cmd_status() {
   local dump
   dump=$(security dump-keychain "$KEYCHAIN" 2>/dev/null) || true
   local services
-  services=$(printf '%s\n' "$dump" | grep '"svce"<blob>="op-cache:' | grep -o 'op-cache:[0-9a-f]*')
+  services=$(printf '%s\n' "$dump" | grep '"svce"<blob>="op-keychain:' | grep -o 'op-keychain:[0-9a-f]*')
   local count=0
   [[ -n "$services" ]] && count=$(printf '%s\n' "$services" | wc -l | tr -d ' ')
 
@@ -441,12 +441,12 @@ refresh) cmd_refresh ;;
 status) cmd_status ;;
 update-idle-timeout) cmd_update_idle_timeout "${2:-}" ;;
 *)
-  echo "usage: op-cache read                 <op://...>  # キャッシュ付きで値を読み取る"
-  echo "       op-cache remove               <op://...>  # 指定エントリを削除"
-  echo "       op-cache clear                            # キャッシュ全削除"
-  echo "       op-cache list                             # キャッシュ一覧を表示"
-  echo "       op-cache refresh                          # 全キャッシュを再取得"
-  echo "       op-cache status                           # キーチェーンの状態を表示"
-  echo "       op-cache update-idle-timeout  <秒数>      # 自動ロックまでの時間を変更"
+  echo "usage: op-keychain read                 <op://...>  # キャッシュ付きで値を読み取る"
+  echo "       op-keychain remove               <op://...>  # 指定エントリを削除"
+  echo "       op-keychain clear                            # キャッシュ全削除"
+  echo "       op-keychain list                             # キャッシュ一覧を表示"
+  echo "       op-keychain refresh                          # 全キャッシュを再取得"
+  echo "       op-keychain status                           # キーチェーンの状態を表示"
+  echo "       op-keychain update-idle-timeout  <秒数>      # 自動ロックまでの時間を変更"
   ;;
 esac
