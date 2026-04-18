@@ -7,6 +7,8 @@
 
 `op read` を呼ぶたびに 1Password サーバーへ通信する代わりに、キーチェーンにキャッシュされた値を即座に返す。キャッシュの有効期限は macOS キーチェーンの「非アクティブ自動ロック」機能をそのまま利用するため、TTL 管理のための別途仕組みは不要。
 
+`op read` はデスクトップアプリ連携を使っていても毎回 1Password サーバーへ通信する。これは 1Password のセキュリティモデルによる仕様。通常の遅延は **約1.8秒/回**（`op` デーモン起動済みの場合。初回はデーモン起動のため10秒以上かかることがある）。op-keychain はキャッシュヒット時の遅延を数十ミリ秒以下に短縮する。
+
 ## 動作要件
 
 - macOS
@@ -35,6 +37,25 @@ export PATH="$HOME/.local/bin:$PATH"
 ```bash
 op-keychain read 'op://vault/item/field'
 ```
+
+### アンインストール
+
+```bash
+# キャッシュのキーチェーンを削除
+op-keychain clear
+
+# スクリプトを削除
+rm ~/.local/bin/op-keychain
+```
+
+先にスクリプトを削除してしまった場合は、キーチェーンを手動で削除する:
+
+```bash
+# CLI で削除
+security delete-keychain ~/Library/Keychains/op-keychain.keychain-db
+```
+
+または **キーチェーンアクセス.app** を開き、`op-keychain` を右クリック → **"op-keychain" キーチェーンを削除**。
 
 ### リポジトリをクローン
 

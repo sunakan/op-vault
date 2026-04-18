@@ -7,6 +7,8 @@
 
 Instead of hitting the 1Password server on every call, op-keychain returns the cached value from Keychain instantly. The cache expires automatically using Keychain's built-in inactivity auto-lock — no separate TTL management needed.
 
+`op read` contacts 1Password servers on every invocation — even with desktop app integration enabled. This is by design in 1Password's security model. Typical latency is **~1.8s per call** (after the `op` daemon has started; the first call can take 10s+ due to daemon startup). op-keychain reduces cached reads to milliseconds.
+
 ## Requirements
 
 - macOS
@@ -35,6 +37,25 @@ Then use from anywhere:
 ```bash
 op-keychain read 'op://vault/item/field'
 ```
+
+### Uninstall
+
+```bash
+# Delete the cache keychain
+op-keychain clear
+
+# Remove the script
+rm ~/.local/bin/op-keychain
+```
+
+If you removed the script first, delete the keychain manually:
+
+```bash
+# via CLI
+security delete-keychain ~/Library/Keychains/op-keychain.keychain-db
+```
+
+Or open **Keychain Access.app** → find `op-keychain` → right-click → **Delete Keychain "op-keychain"**.
 
 ### Clone the repository
 
