@@ -1,77 +1,77 @@
 #!/usr/bin/env bash
 set -eu -o pipefail
-# -e: エラー発生時に即時終了
-# -u: 未定義変数の参照をエラーとして扱う
-# -o pipefail: パイプ途中のコマンド失敗をパイプライン全体の失敗として扱う
+# -e: exit immediately on error
+# -u: treat unset variables as errors
+# -o pipefail: treat pipe failures as errors
 
-# デバッグモード: OP_KEYCHAIN_DEBUG=true または 1 で set -x を有効化
+# Debug mode: set OP_KEYCHAIN_DEBUG=true or 1 to enable set -x
 if [[ "${OP_KEYCHAIN_DEBUG:-}" == "true" || "${OP_KEYCHAIN_DEBUG:-}" == "1" ]]; then
   set -x
 fi
 
 # ============================================================
-# 設定
+# Configuration
 # ============================================================
 
-# macOS キーチェーンの名前とパス
+# macOS Keychain name and path
 readonly KEYCHAIN_NAME="op-keychain"
 readonly KEYCHAIN="$HOME/Library/Keychains/${KEYCHAIN_NAME}.keychain-db"
 
-# 非アクティブ状態が続いた場合にキーチェーンが自動ロックされるまでの時間(秒)
-# デフォルト 1 時間
-# キャッシュミスでキーチェーンをアンロックするとタイマーがリセットされる
-# キャッシュヒット時はアンロックしないためタイマーはリセットされない
+# Time in seconds before the keychain auto-locks due to inactivity
+# Default: 1 hour
+# The timer resets on cache miss (keychain unlock), but not on cache hit
 readonly IDLE_TIMEOUT="${OP_KEYCHAIN_IDLE_TIMEOUT:-3600}"
 
 # ============================================================
-# 内部ユーティリティ
+# Internal utilities
 # ============================================================
 
-# キーチェーンエントリのサービス名を生成する
-# ref の SHA256 ハッシュを使うことで UUID・スラッシュ・日本語などを含む
-# 任意の ref に対して安全かつ一意なサービス名を生成できる
+# Generate a keychain service name for a given ref.
+# Uses SHA256 hash of the ref so that UUIDs, slashes, and non-ASCII
+# characters are handled safely and produce a unique service name.
 _service() {
   local hash
   hash=$(printf '%s' "$1" | shasum -a 256 | cut -d' ' -f1)
   echo "op-keychain:${hash}"
 }
 
-# キーチェーンを初期化する (存在しない場合のみ作成する)
+# Initialize the keychain (create only if it does not exist).
+# Prompts the user via /dev/tty to optionally set a password.
+# Default is an empty password (allows silent unlock).
 _init_keychain() {
   [[ -f "$KEYCHAIN" ]] && return
 
-  # パスワードを設定するか確認する (/dev/tty 経由でターミナルに直接出力)
-  # デフォルトは空パスワード (プロンプトなしでアンロック可能)
+  # Ask whether to set a password, writing directly to the terminal
   local password=""
-  printf 'op-keychain: キーチェーンにパスワードを設定しますか？ [y/N (default: N)]: ' >/dev/tty
+  printf 'op-keychain: Set a password for the keychain? [y/N (default: N)]: ' >/dev/tty
   local answer
   read -r answer </dev/tty
   if [[ "$answer" =~ ^[Yy]$ ]]; then
-    printf 'パスワード: ' >/dev/tty
+    printf 'Password: ' >/dev/tty
     read -rs password </dev/tty
     printf '\n' >/dev/tty
-    printf 'パスワード（確認）: ' >/dev/tty
+    printf 'Password (confirm): ' >/dev/tty
     local confirm
     read -rs confirm </dev/tty
     printf '\n' >/dev/tty
     if [[ "$password" != "$confirm" ]]; then
-      echo "error: パスワードが一致しません" >&2
+      echo "error: passwords do not match" >&2
       return 1
     fi
   fi
 
-  # Keychain Access GUI でパスワードを表示する際は macOS ログインパスワードを求められる
-  # (表示後に Keychain Access を開き直す必要がある)
+  # The macOS login password is required to view the secret in Keychain Access GUI.
+  # (Keychain Access must be reopened after viewing.)
   security create-keychain -p "$password" "${KEYCHAIN_NAME}.keychain"
 
-  # 非アクティブ IDLE_TIMEOUT 秒後に自動ロックするよう設定する
+  # Auto-lock after IDLE_TIMEOUT seconds of inactivity
   security set-keychain-settings -t "$IDLE_TIMEOUT" "$KEYCHAIN"
 
-  # 既存キーチェーンリストを配列で取得し、新しいキーチェーンを末尾に追加する
-  # word splitting を避けるため while ループで処理する
+  # Append the new keychain to the existing keychain list.
+  # Use a while loop to avoid word splitting issues.
   local current_keychains=()
   while IFS= read -r line; do
-    # security list-keychains の出力はダブルクォートと前後の空白を含むため除去する
+    # security list-keychains output includes surrounding quotes and whitespace
     line=$(printf '%s' "$line" | tr -d '"' | xargs)
     [[ -n "$line" ]] && current_keychains+=("$line")
   done < <(security list-keychains -d user)
@@ -79,20 +79,22 @@ _init_keychain() {
   security list-keychains -s "${current_keychains[@]}" "$KEYCHAIN"
 }
 
-# キーチェーンをアンロックする
-# まず空パスワード (初期パスワード) で試み、失敗した場合のみユーザーにパスワードを求める
-# プロセス置換内から呼ばないこと (stdout がパイプになりプロンプトが表示されなくなる)
+# Unlock the keychain.
+# First tries the empty password silently; prompts the user only on failure.
+# Do NOT call this from inside process substitution < <(...) because
+# stdout becomes a pipe and the prompt disappears.
 _unlock_keychain() {
   security unlock-keychain -p "" "$KEYCHAIN" 2>/dev/null && return
   security unlock-keychain "$KEYCHAIN"
 }
 
-# キャッシュ済みエントリを "name\tref" 形式で標準出力に1行ずつ出力する
-# 前提: $KEYCHAIN ファイルが存在し、アンロック済みであること (呼び出し前に確認・アンロックすること)
+# Print cached entries to stdout as "name\tref" lines, one per entry.
+# Prerequisite: $KEYCHAIN must exist and be unlocked before calling this.
 #
-# dump-keychain -d はデータ行の出力形式がアイテム名・値の文字内容に依存して変わるため使わない。
-# 代わりに dump-keychain (データなし) でサービス名一覧を取得し、
-# find-generic-password で各エントリの JSON を個別に読み取る。
+# dump-keychain -d is avoided because its output format depends on the
+# content of item names and values (non-ASCII data is printed as hex).
+# Instead, dump-keychain (no -d) lists service names, then
+# find-generic-password reads each entry's JSON individually.
 _dump_entries() {
   local dump
   dump=$(security dump-keychain "$KEYCHAIN" 2>/dev/null)
@@ -107,14 +109,14 @@ _dump_entries() {
   done < <(printf '%s\n' "$dump" | grep '"svce"<blob>="op-keychain:' | grep -o 'op-keychain:[0-9a-f]*')
 }
 
-# キャッシュ済みの ref 一覧を標準出力に1行ずつ出力する
-# 前提: $KEYCHAIN ファイルが存在し、アンロック済みであること (呼び出し前に確認・アンロックすること)
+# Print cached refs to stdout, one per line.
+# Prerequisite: $KEYCHAIN must exist and be unlocked before calling this.
 _list_refs() {
   _dump_entries | cut -f2
 }
 
-# ref から 1Password アイテム名を取得する
-# 失敗時は空文字を返す
+# Retrieve the 1Password item title for a given ref.
+# Returns an empty string on failure.
 _item_name() {
   local ref="$1"
   local vault item
@@ -124,25 +126,25 @@ _item_name() {
 }
 
 # ============================================================
-# サブコマンド
+# Subcommands
 # ============================================================
 
 # op-keychain read <op://vault/item[/field]>
 #
-# キャッシュヒット: キーチェーンがアンロック中かつ値が存在する場合に返す
-# キャッシュミス: キーチェーンがロック中 (IDLE_TIMEOUT超過) または未キャッシュの場合に
-#                op read で取得してキャッシュに保存してから返す
+# Cache hit:  keychain is unlocked and the value exists → return immediately
+# Cache miss: keychain is locked (IDLE_TIMEOUT exceeded) or entry absent →
+#             fetch via op read, then save to keychain
 #
-# キーチェーンに保存する JSON の形式:
-#   {"ref": "op://...", "name": "<アイテム名>", "value": "<値>"}
-#   ref を JSON に含めることで UUID を含む任意のパスを正確に保存・復元できる
-#   name を含めることで list コマンドで人間が読みやすい名前を表示できる
+# JSON format stored in the keychain:
+#   {"ref": "op://...", "name": "<item title>", "value": "<secret>"}
+#   Including ref allows exact round-trip for paths containing UUIDs.
+#   Including name allows human-readable output in the list command.
 #
-# IDLE_TIMEOUT の仕組み:
-#   キャッシュヒット時: アンロックしないためタイマーはリセットされない
-#   キャッシュミス時: まずアンロックなしで保存を試みる
-#                   キーチェーンがロック中の場合のみアンロック → タイマーがリセットされる
-#   → op-keychain read を呼ばない状態が IDLE_TIMEOUT 秒続くとキーチェーンが自動ロックされる
+# IDLE_TIMEOUT behaviour:
+#   Cache hit:  keychain is not unlocked → timer is NOT reset
+#   Cache miss: tries to save without unlocking first;
+#               unlocks (resets timer) only when the keychain is locked
+#   → the keychain auto-locks after IDLE_TIMEOUT seconds with no cache miss
 cmd_read() {
   local ref="${1:-}"
   if [[ -z "$ref" ]]; then
@@ -155,23 +157,23 @@ cmd_read() {
 
   _init_keychain
 
-  # アンロックせずに読み取りを試みる
-  # キーチェーンがロック中 (IDLE_TIMEOUT超過) の場合は失敗する → キャッシュミス扱いにする
+  # Attempt to read without unlocking.
+  # Fails silently if the keychain is locked (treated as cache miss).
   local cached
   cached=$(security find-generic-password -a "$USER" -s "$service" -w "$KEYCHAIN" 2>/dev/null) || true
   if [[ -n "$cached" ]]; then
     local value
-    # jq パース失敗（キャッシュが壊れている等）はキャッシュミス扱いにする
+    # Treat JSON parse failure (corrupted cache, etc.) as a cache miss
     if value=$(jq -r '.value' <<<"$cached" 2>/dev/null); then
       printf '%s' "$value"
       return 0
     fi
   fi
 
-  # キャッシュミス: 1Password CLI から取得する
+  # Cache miss: fetch from 1Password CLI
   local value
   if ! value=$(op read "$ref"); then
-    echo "error: op read に失敗しました: $ref" >&2
+    echo "error: op read failed: $ref" >&2
     return 1
   fi
 
@@ -179,41 +181,41 @@ cmd_read() {
   name=$(_item_name "$ref") || name=""
 
   local json
-  # -a (--ascii-output): 非 ASCII 文字を \uXXXX エスケープにして純 ASCII JSON にする
-  # security find-generic-password -w は非 ASCII バイトを含むデータを hex 形式で返すため、
-  # 純 ASCII にしておかないと jq でのパースが壊れる
+  # -a (--ascii-output): escape non-ASCII characters as \uXXXX to produce
+  # pure ASCII JSON. security find-generic-password -w returns non-ASCII
+  # bytes as hex, which breaks jq parsing.
   json=$(jq -cna --arg ref "$ref" --arg name "$name" --arg value "$value" '{"ref": $ref, "name": $name, "value": $value}')
 
-  # まずアンロックなしで保存を試みる
-  # ロック中の場合のみアンロック (プロンプト) してから再試行する
-  # -T を指定しない場合: 作成者 (security CLI) はプロンプトなしでアクセス可
-  # Keychain Access GUI でパスワードを表示する際は macOS ログインパスワードを求められる
-  # -U: 既存エントリを上書き
+  # Try to save without unlocking first.
+  # Only unlock (prompt) if the keychain is locked.
+  # Without -T: the creating process (security CLI) can access without prompt.
+  # Keychain Access GUI requires the macOS login password to reveal the secret.
+  # -U: overwrite existing entry
   if ! security add-generic-password -U -a "$USER" -s "$service" -w "$json" "$KEYCHAIN" 2>/dev/null; then
-    # ロック中 → アンロック (ここで初めてパスワードを聞く)
+    # Keychain is locked → unlock now (first password prompt)
     _unlock_keychain
     security add-generic-password -U -a "$USER" -s "$service" -w "$json" "$KEYCHAIN"
   fi
 
-  # op read と動作を合わせて改行なしで出力する
+  # Match op read behaviour: print without a trailing newline
   printf '%s' "$value"
 }
 
 # op-keychain clear
 #
-# キーチェーン全体を削除する
+# Delete the entire keychain.
 cmd_clear() {
   if [[ ! -f "$KEYCHAIN" ]]; then
-    echo "キャッシュなし"
+    echo "no cache"
     return
   fi
   security delete-keychain "$KEYCHAIN" 2>/dev/null || true
-  echo "全キャッシュをクリアしました"
+  echo "all cache cleared"
 }
 
 # op-keychain remove <op://vault/item[/field]>
 #
-# 指定した ref のキャッシュエントリのみ削除する
+# Delete only the cache entry for the given ref.
 cmd_remove() {
   local ref="${1:-}"
   if [[ -z "$ref" ]]; then
@@ -222,31 +224,30 @@ cmd_remove() {
   fi
 
   if [[ ! -f "$KEYCHAIN" ]]; then
-    echo "キャッシュなし" >&2
+    echo "no cache" >&2
     return 1
   fi
 
   local service
   service=$(_service "$ref")
-  # まずアンロックなしで削除を試みる
-  # ロック中の場合のみアンロック (プロンプト) してから再試行する
+  # Try to delete without unlocking first; unlock only if necessary
   if ! security delete-generic-password -a "$USER" -s "$service" "$KEYCHAIN" 2>/dev/null; then
     _unlock_keychain
     if ! security delete-generic-password -a "$USER" -s "$service" "$KEYCHAIN" 2>/dev/null; then
-      echo "error: キャッシュが見つかりません: $ref" >&2
+      echo "error: cache entry not found: $ref" >&2
       return 1
     fi
   fi
-  echo "削除しました: $ref"
+  echo "removed: $ref"
 }
 
 # op-keychain list
 #
-# キーチェーンに保存されているエントリを列挙する
-# キーチェーンがロック中 (IDLE_TIMEOUT超過) の場合はアンロック (プロンプト) してから一覧表示する
+# List all entries in the keychain.
+# If the keychain is locked (IDLE_TIMEOUT exceeded), unlock before listing.
 cmd_list() {
   if [[ ! -f "$KEYCHAIN" ]]; then
-    echo "キャッシュなし"
+    echo "no cache"
     return
   fi
 
@@ -263,32 +264,32 @@ cmd_list() {
   done < <(_dump_entries)
 
   if ((found == 0)); then
-    echo "キャッシュなし"
+    echo "no cache"
   fi
 }
 
 # op-keychain refresh
 #
-# キャッシュ済みの全 ref を再取得してキーチェーンを更新する
+# Re-fetch all cached refs and update the keychain.
 #
-# op read は並行実行し、キーチェーンへの書き込みは直列化する
-# (macOS Keychain の並行書き込み非サポートのため)
+# op read calls are parallelised; keychain writes are serialised
+# because macOS Keychain does not support concurrent writes.
 cmd_refresh() {
   if [[ ! -f "$KEYCHAIN" ]]; then
-    echo "キャッシュなし"
+    echo "no cache"
     return
   fi
 
   _unlock_keychain
 
-  # キャッシュ済み ref 一覧を収集
+  # Collect cached refs
   local refs=()
   while IFS= read -r ref; do
     refs+=("$ref")
   done < <(_list_refs)
 
   if [[ ${#refs[@]} -eq 0 ]]; then
-    echo "キャッシュなし"
+    echo "no cache"
     return
   fi
 
@@ -297,8 +298,9 @@ cmd_refresh() {
   # shellcheck disable=SC2064
   trap "rm -rf '$tmpdir'" EXIT
 
-  # セッション未確立の場合、最初の ref を直列で実行して認証を1回だけ行う
-  # (並行サブシェルは確立済みセッションを引き継ぐため、以降のダイアログは不要になる)
+  # If no 1Password session is established, run the first ref serially
+  # to trigger authentication once. Subsequent parallel subshells inherit
+  # the established session and require no further dialogs.
   if ! op whoami &>/dev/null; then
     local value name
     if value=$(op read "${refs[0]}" 2>/dev/null); then
@@ -310,7 +312,7 @@ cmd_refresh() {
     fi
   fi
 
-  # op read を並行実行 (セッション確立済みのためダイアログは出ない)
+  # Run op read in parallel (session already established, no dialogs)
   for i in "${!refs[@]}"; do
     [[ -f "${tmpdir}/${i}" || -f "${tmpdir}/${i}.error" ]] && continue
     (
@@ -325,14 +327,14 @@ cmd_refresh() {
   done
   wait
 
-  # キーチェーンへ直列に書き込む
+  # Write to the keychain serially
   local ok=0 fail=0
   for i in "${!refs[@]}"; do
     local ref="${refs[$i]}"
     local service
     service=$(_service "$ref")
     if [[ -f "${tmpdir}/${i}.error" ]]; then
-      printf '  skip (op read 失敗): %s\n' "$ref" >&2
+      printf '  skip (op read failed): %s\n' "$ref" >&2
       fail=$((fail + 1))
       continue
     fi
@@ -347,63 +349,65 @@ cmd_refresh() {
     printf '  refreshed: %s\n' "$ref"
   done
 
-  printf '完了: %d 件更新, %d 件失敗\n' "$ok" "$fail"
+  printf 'done: %d updated, %d failed\n' "$ok" "$fail"
 }
 
-# op-keychain update-idle-timeout <秒数>
+# op-keychain update-idle-timeout <seconds>
 #
-# キーチェーンの非アクティブ自動ロックまでの時間を変更する
+# Update the inactivity auto-lock timeout for the keychain.
+# OP_KEYCHAIN_IDLE_TIMEOUT (default: 3600) is used only at keychain creation.
+# Use this command to change it afterwards.
 cmd_update_idle_timeout() {
   local seconds="${1:-}"
   if [[ -z "$seconds" ]]; then
-    echo "usage: op-keychain update-idle-timeout <秒数>" >&2
+    echo "usage: op-keychain update-idle-timeout <seconds>" >&2
     return 1
   fi
   if [[ ! "$seconds" =~ ^[0-9]+$ ]]; then
-    echo "error: 秒数は正の整数で指定してください: $seconds" >&2
+    echo "error: seconds must be a positive integer: $seconds" >&2
     return 1
   fi
 
   if [[ ! -f "$KEYCHAIN" ]]; then
-    echo "キャッシュなし" >&2
+    echo "no cache" >&2
     return 1
   fi
 
   security set-keychain-settings -t "$seconds" "$KEYCHAIN"
-  echo "idle-timeout を ${seconds}秒 に設定しました"
+  echo "idle-timeout set to ${seconds}s"
 }
 
 # op-keychain status
 #
-# キーチェーンの状態（IDLE_TIMEOUT・ロック状態・エントリ数）を表示する
+# Show keychain status: idle-timeout, lock state, and entry count.
 #
-# ロック状態の判定方法:
-#   dump-keychain はロック中でも属性情報（サービス名等）を返す。
-#   最初のエントリに find-generic-password でアクセスを試み、
-#   成功すればアンロック中、失敗すればロック中と判定する（副作用なし）。
+# Lock state detection:
+#   dump-keychain returns attribute info (service names, etc.) even when locked.
+#   Attempt find-generic-password on the first entry to determine lock state
+#   (no side effects). Success → unlocked; failure → locked.
 cmd_status() {
   if [[ ! -f "$KEYCHAIN" ]]; then
-    printf 'キーチェーン: なし\n'
+    printf 'keychain:     not found\n'
     return
   fi
 
-  printf 'キーチェーン: あり (%s)\n' "$KEYCHAIN"
+  printf 'keychain:     %s\n' "$KEYCHAIN"
 
-  # IDLE_TIMEOUT を show-keychain-info から取得
-  # 出力例: "... timeout=3600s" または "... timeout=0s"（タイムアウトなし）
+  # Get IDLE_TIMEOUT from show-keychain-info
+  # Example output: "... timeout=3600s" or "... timeout=0s" (no timeout)
   local info
   info=$(security show-keychain-info "$KEYCHAIN" 2>&1) || true
   local seconds
   seconds=$(printf '%s\n' "$info" | grep -o 'timeout=[0-9]*s' | grep -o '[0-9]*') || true
   if [[ -z "$seconds" ]]; then
-    printf 'IDLE_TIMEOUT: 不明\n'
+    printf 'idle-timeout: unknown\n'
   elif [[ "$seconds" -eq 0 ]]; then
-    printf 'IDLE_TIMEOUT: なし（自動ロックなし）\n'
+    printf 'idle-timeout: none (auto-lock disabled)\n'
   else
-    printf 'IDLE_TIMEOUT: %s秒\n' "$seconds"
+    printf 'idle-timeout: %ss\n' "$seconds"
   fi
 
-  # dump-keychain でサービス名を取得（ロック中でも動作する）
+  # List service names via dump-keychain (works even when locked)
   local dump
   dump=$(security dump-keychain "$KEYCHAIN" 2>/dev/null) || true
   local services
@@ -412,24 +416,24 @@ cmd_status() {
   [[ -n "$services" ]] && count=$(printf '%s\n' "$services" | wc -l | tr -d ' ')
 
   if [[ $count -eq 0 ]]; then
-    printf 'エントリ数:   0件\n'
+    printf 'entries:      0\n'
     return
   fi
 
-  # 最初のエントリへのアクセス可否でロック状態を判定
+  # Probe the first entry to determine lock state
   local first_service
   first_service=$(printf '%s\n' "$services" | head -1)
   if security find-generic-password -a "$USER" -s "$first_service" -w "$KEYCHAIN" >/dev/null 2>&1; then
-    printf 'ロック状態:   アンロック中\n'
-    printf 'エントリ数:   %s件\n' "$count"
+    printf 'lock status:  unlocked\n'
+    printf 'entries:      %s\n' "$count"
   else
-    printf 'ロック状態:   ロック中\n'
-    printf 'エントリ数:   不明（ロック中のため）\n'
+    printf 'lock status:  locked\n'
+    printf 'entries:      unknown (locked)\n'
   fi
 }
 
 # ============================================================
-# エントリポイント
+# Entry point
 # ============================================================
 
 case "${1:-}" in
@@ -441,12 +445,12 @@ refresh) cmd_refresh ;;
 status) cmd_status ;;
 update-idle-timeout) cmd_update_idle_timeout "${2:-}" ;;
 *)
-  echo "usage: op-keychain read                 <op://...>  # キャッシュ付きで値を読み取る"
-  echo "       op-keychain remove               <op://...>  # 指定エントリを削除"
-  echo "       op-keychain clear                            # キャッシュ全削除"
-  echo "       op-keychain list                             # キャッシュ一覧を表示"
-  echo "       op-keychain refresh                          # 全キャッシュを再取得"
-  echo "       op-keychain status                           # キーチェーンの状態を表示"
-  echo "       op-keychain update-idle-timeout  <秒数>      # 自動ロックまでの時間を変更"
+  echo "usage: op-keychain read                 <op://...>  # read value with cache"
+  echo "       op-keychain remove               <op://...>  # remove a cached entry"
+  echo "       op-keychain clear                            # clear all cache"
+  echo "       op-keychain list                             # list cached entries"
+  echo "       op-keychain refresh                          # refresh all cached entries"
+  echo "       op-keychain status                           # show keychain status"
+  echo "       op-keychain update-idle-timeout  <seconds>   # update auto-lock timeout"
   ;;
 esac
