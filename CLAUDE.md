@@ -46,6 +46,7 @@ OP_KEYCHAIN_DEBUG=true ./op-keychain.sh read 'op://Test/test02/password'
 - **`_dump_entries`**: `security dump-keychain`（データなし）でサービス名（`op-keychain:<hash>`）を列挙し、各サービスに対して `find-generic-password -w` で JSON を個別取得 → `name\tref` 形式で出力。`dump-keychain -d` は非 ASCII データを hex 形式で出力するため使わない。前提: キーチェーンがアンロック済みであること。
 - **`_list_refs`**: `_dump_entries | cut -f2` で ref のみ出力。`cmd_refresh` が使用。
 - **`cmd_read`**: アンロックせず読み取り試行 → ヒットで即返却 / ミスで `op read` + `_item_name` → アンロックなしで保存試行 → 失敗時のみ `_unlock_keychain` → 保存。
+- **`cmd_remove`**: アンロックなしで `delete-generic-password` を試み、失敗時のみ `_unlock_keychain` → 再試行。`cmd_clear` がキーチェーン全体削除なのに対し、こちらは1エントリのみ削除。
 - **`cmd_list`**: `_unlock_keychain` → `_dump_entries` で `アイテム名 (ref)` 形式で列挙。
 - **`cmd_refresh`**: `_unlock_keychain` → `_list_refs` で ref 一覧収集 → セッション未確立なら最初の ref を直列で `op read` + `_item_name`（認証1回） → 残りを並行実行 → キーチェーンへ直列書き込み。
 - **`cmd_status`**: `security show-keychain-info` で IDLE_TIMEOUT を取得。`dump-keychain`（ロック中でも動作）でサービス名を列挙し、最初のエントリに `find-generic-password` でアクセスを試みてロック状態を判定（副作用なし）。アンロック中ならエントリ数も表示。
