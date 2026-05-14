@@ -153,7 +153,7 @@ op-keychain version                                    # バージョン表示
 **フロー:**
 
 1. ref バリデーション(§4.2)
-2. keychain が存在しなければ、プロンプトなし・空パスワード固定で自動作成する(パスワードを設定したい場合は事前に `op-keychain init` を明示的に実行すること)
+2. keychain が存在しなければ、プロンプトなし・空パスワード固定で自動作成し、`AddToList()` でシステムの keychain リストに登録する(パスワードを設定したい場合は事前に `op-keychain init` を明示的に実行すること)
 3. unlock せずに `find-generic-password -w` で読み出しを試行
    - 成功 (cache hit): JSON をパースして `.value` を stdout に改行なしで出力、exit 0
    - パース失敗: cache miss として次へ
@@ -179,7 +179,7 @@ op-keychain version                                    # バージョン表示
 | entry あり(ロック中) | `removed: <ref>` | - | 0 |
 | entry なし | - | `error: cache not found: <ref>` | 1 |
 
-unlock せずに削除を試み、失敗時のみ unlock してリトライ。
+unlock せずに削除を試み、`ErrLocked` の場合のみ unlock してリトライ。`ErrNotFound` の場合はリトライせず即 `error: cache not found: <ref>` を返す。
 
 #### 4.3.3 `clear [--yes]`
 
@@ -210,7 +210,7 @@ keychain ファイル自体を削除。
 
 1. keychain ファイルがなければ `no keychain` を stdout に出して exit 0
 2. unlock(§4.4)
-3. entry 一覧から ref 一覧を収集。0 件なら `no cache` を stdout に出して exit 0
+3. entry 一覧を収集(各 entry から ref と account フィールドを保持)。0 件なら `no cache` を stdout に出して exit 0
 4. 各 ref を順番に処理:
    - account の決定: `--account` 指定あり → そのアカウント、なし → entry の `account` フィールド
    - 1Password SDK で value と item title を取得
@@ -380,8 +380,8 @@ type Keychain interface {
     // 前提: keychain がアンロック済みであること
     ListServices() ([]string, error)
 
-    // unlock。password が空文字なら silent unlock 試行(-p "" 相当)
-    Unlock(password string) error
+    // unlock。内部で silent 試行(-p "")を行い、失敗時のみ GUI ダイアログを表示する
+    Unlock() error
 
     // idle timeout 設定
     SetIdleTimeout(seconds int) error
@@ -402,6 +402,15 @@ type Keychain interface {
 ```
 
 実装は `keychain_exec.go` で `os/exec.Command("security", ...)` を呼ぶ。
+
+**Sentinel errors**: 呼び出し側がエラーの種類を区別できるよう、以下を定義する。
+
+```go
+var ErrLocked   = errors.New("keychain is locked")
+var ErrNotFound = errors.New("entry not found")
+```
+
+`Get()`、`Set()`、`Remove()` はこれらを返す。CLI 層は `errors.Is(err, keychain.ErrLocked)` でリトライ判定を行う。
 
 **`dump-keychain -d` を使わない理由**: `-d` を付けるとパスワードデータも出力されるが、非 ASCII バイトを hex 形式で出力するため JSON パースが壊れる。`"svce"<blob>="op-keychain:...` 行のみ抽出してサービス名を取得し、`find-generic-password -w` で個別に取得する。
 
@@ -480,7 +489,7 @@ SDK クライアントは 1 インスタンスを全 ref で使い回す。1Pass
 - `Service` 関数: bash 版の `_service()` と同じハッシュ値を返すこと(互換性の証跡)
 - `read` cache hit / cache miss / SDK 失敗 / keychain 自動作成
 - `remove` 存在する entry / 存在しない entry / keychain なし
-- `list` 0 件 / 複数件 / name なし entry
+- `list` 0 件 / 複数件 / name なし entry / ref のアルファベット順での出力
 - `refresh` 全成功 / 一部失敗 / 0 件
 - `clear` `--yes` あり / `--yes` なしで `y` 入力 / `--yes` なしで `N` 入力
 - `set-idle-timeout` 正の整数 / 非正整数 / 引数なし
@@ -527,6 +536,17 @@ type SetIdleTimeoutCmd struct {
 }
 ```
 
+kong のパースエラー(必須引数欠落等)はデフォルト exit code 1 を返すが、§4.6 の規約に合わせて exit code 2 に統一すること:
+
+```go
+kong.New(&cli, kong.Exit(func(code int) {
+    if code != 0 {
+        os.Exit(2)
+    }
+    os.Exit(0)
+}))
+```
+
 ---
 
 ## 9. ロギング
@@ -555,6 +575,7 @@ type SetIdleTimeoutCmd struct {
 
 ### 10.3 CI (GitHub Actions)
 
+- runner: `macos-latest`(`CGO_ENABLED=1` が必須のため Linux 不可)
 - `go test -short ./...` (ユニットテスト)
 - `golangci-lint run`
 - `go build ./...`
@@ -594,4 +615,4 @@ integration test は CI では実行しない。
 - [ ] `OP_KEYCHAIN_DEBUG=1` でも value 本体はログに出ない
 - [ ] `golangci-lint run` でエラーなし
 - [ ] ユニットテストカバレッジ 70% 以上(`internal/cli`, `internal/keychain`, `internal/op`)
-- [ ] `go build` が `darwin/arm64` と `darwin/amd64` の両方で成功する
+- [ ] `go build` が `darwin/arm64` で成功する
