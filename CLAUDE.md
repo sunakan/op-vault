@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `op-keychain.sh` は `op read`（1Password CLI）の結果を macOS キーチェーンにキャッシュするシェルスクリプト。IDLE_TIMEOUT（デフォルト1時間）付きで、キーチェーンの非アクティブ自動ロック機能を利用してキャッシュ期限を管理する。
 
+**現在 Go への移行を計画中。** Go 版の仕様は `SPEC.md`、bash 版の仕様は `SPEC.old.md` を参照。Go 版リリース後は `op-keychain.sh` を削除する。
+
 ## コマンド
 
 ```bash
@@ -37,7 +39,7 @@ OP_KEYCHAIN_DEBUG=true ./op-keychain.sh read 'op://Test/test02/password'
 
 ## アーキテクチャ
 
-`op-keychain.sh` 単一ファイル構成。仕様の詳細は `SPEC.md` を参照。
+`op-keychain.sh` 単一ファイル構成。仕様の詳細は `SPEC.old.md` を参照。
 
 - **`_service <ref>`**: ref の SHA256 ハッシュを `op-keychain:<hash>` 形式のサービス名に変換。任意の ref（UUID・スラッシュ・日本語含む）を安全に扱うため。
 - **`_init_keychain`**: `~/Library/Keychains/op-keychain.keychain-db` を初回のみ作成。作成時にパスワード設定を `/dev/tty` 経由でインタラクティブに確認する（デフォルト: 空パスワード）。
@@ -62,5 +64,5 @@ OP_KEYCHAIN_DEBUG=true ./op-keychain.sh read 'op://Test/test02/password'
 - キーチェーンに保存する JSON は `jq -cna`（`--ascii-output`）で構築すること。非 ASCII 文字を含む JSON を保存すると、`security find-generic-password -w` が hex 形式で返し jq パースが壊れる。
 - Keychain Access GUI は CLI でキーチェーンを変更しても**リアルタイムで反映されない**。操作後に GUI を閉じて開き直す。
 - テスト用の ref は `op://Test/test02/password` など専用のものを使う。本物の ref をデバッグコマンドで実行すると secret が出力に混入する。
-- `cmd_refresh` の並行 `op read` は macOS Keychain の並行書き込み非サポートのため、書き込みのみ直列化している（詳細は SPEC.md「キーチェーンの並行アクセス制約」参照）。
+- `cmd_refresh` の並行 `op read` は macOS Keychain の並行書き込み非サポートのため、書き込みのみ直列化している。
 - 1Password デスクトップアプリ連携使用。セッションは `Cmd+Shift+L`（Lock Now）で強制失効させてテストできる。
