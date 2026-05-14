@@ -153,7 +153,7 @@ op-keychain version                                    # バージョン表示
 **フロー:**
 
 1. ref バリデーション(§4.2)
-2. keychain が存在しなければ `init` と同等の初期化(§4.3.8 参照)
+2. keychain が存在しなければ、プロンプトなし・空パスワード固定で自動作成する(パスワードを設定したい場合は事前に `op-keychain init` を明示的に実行すること)
 3. unlock せずに `find-generic-password -w` で読み出しを試行
    - 成功 (cache hit): JSON をパースして `.value` を stdout に改行なしで出力、exit 0
    - パース失敗: cache miss として次へ
@@ -174,7 +174,7 @@ op-keychain version                                    # バージョン表示
 
 | 条件 | stdout | stderr | exit |
 |---|---|---|---|
-| keychain なし | - | `no cache` | 1 |
+| keychain なし | - | `error: no keychain` | 1 |
 | entry あり(unlock 中) | `removed: <ref>` | - | 0 |
 | entry あり(ロック中) | `removed: <ref>` | - | 0 |
 | entry なし | - | `error: cache not found: <ref>` | 1 |
@@ -185,18 +185,18 @@ unlock せずに削除を試み、失敗時のみ unlock してリトライ。
 
 keychain ファイル自体を削除。
 
-- `--yes` フラグがない場合: `Are you sure you want to clear all cache? [y/N]: ` を `/dev/tty` に表示し確認。`y` 以外は中断(exit 0)
-- keychain が存在しなければ `no cache` を stdout に出して exit 0(idempotent)
+- `--yes` フラグがない場合: `Are you sure you want to clear all cache? [y/N]: ` を `/dev/tty` に表示し確認。`y` または `Y` 以外は中断(exit 0)
+- keychain が存在しなければ `no keychain` を stdout に出して exit 0(idempotent)
 - 削除成功時: `cleared all cache` を stdout に出力
 
 #### 4.3.4 `list`
 
 キャッシュ済み entry を一覧表示。
 
-- keychain ファイルがなければ `no cache` を出して exit 0
+- keychain ファイルがなければ `no keychain` を stdout に出して exit 0
 - ロックされていれば unlock
-- 各 entry を `  <name> (<ref>)` の形式で出力(name が空なら `  <ref>`)
-- entry が 0 件なら `no cache` を出して exit 0
+- 各 entry を ref のアルファベット順に `  <name> (<ref>)` の形式で出力(name が空なら `  <ref>`)
+- entry が 0 件なら `no cache` を stdout に出して exit 0
 
 #### 4.3.5 `refresh [--account <name>]`
 
@@ -208,9 +208,9 @@ keychain ファイル自体を削除。
 
 **フロー:**
 
-1. keychain ファイルがなければ `no cache` を stdout に出して exit 0
+1. keychain ファイルがなければ `no keychain` を stdout に出して exit 0
 2. unlock(§4.4)
-3. entry 一覧から ref 一覧を収集。0 件なら `no cache` を出して exit 0
+3. entry 一覧から ref 一覧を収集。0 件なら `no cache` を stdout に出して exit 0
 4. 各 ref を順番に処理:
    - account の決定: `--account` 指定あり → そのアカウント、なし → entry の `account` フィールド
    - 1Password SDK で value と item title を取得
@@ -231,7 +231,7 @@ keychain: none
 
 keychain あり(unlock 中):
 ```
-keychain:     /Users/.../Library/Keychains/op-keychain.keychain-db
+keychain:     /Users/username/Library/Keychains/op-keychain.keychain-db
 idle-timeout: 3600s
 lock status:  unlocked
 entries:      5
@@ -239,7 +239,7 @@ entries:      5
 
 keychain あり(ロック中):
 ```
-keychain:     /Users/.../Library/Keychains/op-keychain.keychain-db
+keychain:     /Users/username/Library/Keychains/op-keychain.keychain-db
 idle-timeout: 3600s
 lock status:  locked
 entries:      unknown (locked)
@@ -255,12 +255,12 @@ entries:      unknown (locked)
 |---|---|---|---|
 | 引数なし | - | `usage: op-keychain set-idle-timeout <seconds>` | 2 |
 | 正の整数でない | - | `error: seconds must be a positive integer: <value>` | 2 |
-| keychain なし | - | `no cache` | 1 |
+| keychain なし | - | `error: no keychain` | 1 |
 | 成功 | `idle-timeout set to <seconds>s` | - | 0 |
 
 #### 4.3.8 `init`
 
-明示的に keychain を作成する。`read` 呼び出し時にも内部で実行される。
+明示的に keychain を作成する。`read` が内部で keychain を自動作成する場合は空パスワード固定・プロンプトなしで行う。パスワードを設定したい場合は本コマンドを事前に実行すること。
 
 - 既に存在する場合: `already initialized` を stdout に出して exit 0
 
@@ -268,7 +268,11 @@ entries:      unknown (locked)
 
 1. `/dev/tty` を直接開いて `Set a password for the keychain? [y/N]: ` を表示
    - `N`(デフォルト): 空パスワードで作成。以降の unlock はプロンプトなし
-   - `y`: パスワードの入力・確認を `/dev/tty` で求める。不一致の場合は `error: passwords do not match` を stderr に出して exit 1
+   - `y`: 以下のプロンプトを `/dev/tty` で表示しパスワードの入力・確認を求める。不一致の場合は `error: passwords do not match` を stderr に出して exit 1
+     ```
+     Enter password:
+     Confirm password:
+     ```
 2. `security create-keychain -p "<password>" op-keychain.keychain` でキーチェーンを作成
 3. `security set-keychain-settings -t <OP_KEYCHAIN_IDLE_TIMEOUT> <keychain>` で idle timeout を設定
 4. `security list-keychains -d user` で既存のキーチェーンリストを取得(各行は `    "/path/to/keychain"` 形式)
@@ -287,7 +291,7 @@ entries:      unknown (locked)
    - 失敗: 次のステップへ
 2. `security unlock-keychain <keychain>` を実行
 
-ステップ 2 のパスワードプロンプトは `/dev/tty` に出力されるため、stdout/stderr がリダイレクトされていてもユーザーに表示される。
+ステップ 2 では macOS の GUI ダイアログが表示される。
 
 ### 4.5 環境変数
 
@@ -339,6 +343,7 @@ entries:      unknown (locked)
 ├── go.sum
 ├── mise.toml
 ├── .golangci.yml
+├── .goreleaser.yml
 ├── .github/workflows/
 │   └── ci.yml
 ├── SPEC.md (this file)
@@ -417,6 +422,8 @@ type Client interface {
 ```
 
 実装は `client.go` で `onepassword-sdk-go` を呼ぶ。`account` が空文字の場合は SDK の既定動作。
+
+`account` フィールドは表示・記録用のメタデータとして扱い、SDK への per-call 引数としては渡さない。将来、複数アカウント切り替えが必要になった場合に interface を見直す。
 
 ### 5.3 internal/op/ref.go の責務
 
@@ -538,12 +545,13 @@ type SetIdleTimeoutCmd struct {
 - `mise.toml` に Go バージョンを固定(例: `go = "1.24"`)
 - `go build ./cmd/op-keychain` で単一バイナリ
 - `CGO_ENABLED=1`(1Password Go SDK の Desktop App Integration に必要)
-- ターゲットは `darwin/arm64` と `darwin/amd64`
+- ターゲットは `darwin/arm64` のみ
 
 ### 10.2 リリース
 
 - GitHub Releases に `goreleaser` で署名済みバイナリを公開
 - `version` サブコマンドは `goreleaser` の `-ldflags` から埋める
+- ターゲットアーキテクチャ: `darwin/arm64` のみ(`darwin/amd64` は実機確認不可のため除外)
 
 ### 10.3 CI (GitHub Actions)
 
