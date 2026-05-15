@@ -1,0 +1,37 @@
+version: "2"
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+
+linters:
+  default: standard
+  enable:
+    - errorlint
+    - fatcontext
+    - gocritic
+    - gosec
+    - misspell
+    - modernize
+    - nolintlint
+    - perfsprint
+    - revive
+    - unconvert
+    - unparam
+    - usestdlibvars
+
+  settings:
+    gocritic:
+      enable-all: true
+      disabled-checks:
+        - hugeParam
+        - rangeValCopy
+    nolintlint:
+      require-specific: true
+    misspell:
+      locale: US
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
