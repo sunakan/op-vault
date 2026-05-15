@@ -17,7 +17,7 @@ var version = "dev"
 type CLI struct {
 	Read           ReadCmd           `cmd:"" help:"Read a secret with cache"`
 	Remove         RemoveCmd         `cmd:"" help:"Remove a cached entry"`
-	Clear          ClearCmd          `cmd:"" help:"Clear all cache"`
+	Clear          cli.ClearCmd      `cmd:"" help:"Clear all cache"`
 	List           ListCmd           `cmd:"" help:"List cached entries"`
 	Refresh        RefreshCmd        `cmd:"" help:"Refresh all entries from 1Password"`
 	Status         StatusCmd         `cmd:"" help:"Show keychain status"`
@@ -53,14 +53,6 @@ func (c *RemoveCmd) Run() error {
 	return nil
 }
 
-type ClearCmd struct {
-	Yes bool `name:"yes" help:"Skip confirmation prompt"`
-}
-
-func (c *ClearCmd) Run() error {
-	fmt.Println("not implemented")
-	return nil
-}
 
 type ListCmd struct{}
 
@@ -99,6 +91,7 @@ func main() {
 	var cliCmd CLI
 	cliCmd.Version.Version = version
 	cliCmd.Init.KC = kc
+	cliCmd.Clear.KC = kc
 	ctx := kong.Parse(&cliCmd,
 		kong.Name("op-keychain"),
 		kong.Description("Cache op:// secrets in macOS Keychain"),

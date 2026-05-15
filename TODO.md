@@ -151,7 +151,7 @@ security delete-keychain "$HOME/Library/Keychains/op-keychain-test.keychain-db"
 
 ## Step 4d: `clear` コマンド
 
-- [ ] `internal/cli/clear.go` 実装
+- [x] `internal/cli/clear.go` 実装
 
 ### 動作確認
 
