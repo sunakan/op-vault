@@ -19,20 +19,11 @@ type CLI struct {
 	Remove         cli.RemoveCmd         `cmd:"" help:"Remove a cached entry"`
 	Clear          cli.ClearCmd          `cmd:"" help:"Clear all cache"`
 	List           cli.ListCmd           `cmd:"" help:"List cached entries"`
-	Refresh        RefreshCmd            `cmd:"" help:"Refresh all entries from 1Password"`
+	Refresh        cli.RefreshCmd        `cmd:"" help:"Refresh all entries from 1Password"`
 	Status         cli.StatusCmd         `cmd:"" help:"Show keychain status"`
 	SetIdleTimeout cli.SetIdleTimeoutCmd `cmd:"" name:"set-idle-timeout" help:"Set auto-lock timeout"`
 	Init           cli.InitCmd           `cmd:"" help:"Initialize the keychain"`
 	Version        cli.VersionCmd        `cmd:"" help:"Print version"`
-}
-
-type RefreshCmd struct {
-	Account string `short:"a" name:"account" optional:"" env:"OP_ACCOUNT" help:"1Password account name"`
-}
-
-func (c *RefreshCmd) Run() error {
-	fmt.Println("not implemented")
-	return nil
 }
 
 func main() {
@@ -42,6 +33,8 @@ func main() {
 	cliCmd.Version.Version = version
 	cliCmd.Read.KC = kc
 	cliCmd.Read.AppVersion = version
+	cliCmd.Refresh.KC = kc
+	cliCmd.Refresh.AppVersion = version
 	cliCmd.Init.KC = kc
 	cliCmd.Clear.KC = kc
 	cliCmd.Status.KC = kc

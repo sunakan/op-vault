@@ -410,7 +410,7 @@ OP_KEYCHAIN_NAME=op-keychain-test go run ./cmd/op-keychain clear --yes
 
 **前提: 1Password Desktop App が起動・ログイン済みであること**
 
-- [ ] `internal/cli/refresh.go` 実装
+- [x] `internal/cli/refresh.go` 実装
 
 ### 動作確認
 
