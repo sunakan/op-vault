@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/alecthomas/kong"
+	"github.com/sunakan/op-keychain/internal/cli"
 )
 
 var version = "dev"
@@ -20,7 +21,7 @@ type CLI struct {
 	Status         StatusCmd         `cmd:"" help:"Show keychain status"`
 	SetIdleTimeout SetIdleTimeoutCmd `cmd:"" name:"set-idle-timeout" help:"Set auto-lock timeout"`
 	Init           InitCmd           `cmd:"" help:"Initialize the keychain"`
-	Version        VersionCmd        `cmd:"" help:"Print version"`
+	Version        cli.VersionCmd    `cmd:"" help:"Print version"`
 }
 
 type ReadCmd struct {
@@ -90,16 +91,10 @@ func (c *InitCmd) Run() error {
 	return nil
 }
 
-type VersionCmd struct{}
-
-func (c *VersionCmd) Run() error {
-	fmt.Printf("op-keychain %s\n", version)
-	return nil
-}
-
 func main() {
-	var cli CLI
-	ctx := kong.Parse(&cli,
+	var cliCmd CLI
+	cliCmd.Version.Version = version
+	ctx := kong.Parse(&cliCmd,
 		kong.Name("op-keychain"),
 		kong.Description("Cache op:// secrets in macOS Keychain"),
 		kong.Exit(func(code int) {

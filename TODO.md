@@ -57,8 +57,8 @@ echo $?   # → 0
 
 ## Step 2: `version` サブコマンド
 
-- [ ] `internal/cli/version.go` 実装
-- [ ] `ldflags` 未設定時は `"dev"` を返す
+- [x] `internal/cli/version.go` 実装
+- [x] `ldflags` 未設定時は `"dev"` を返す
 
 ### 動作確認
 
