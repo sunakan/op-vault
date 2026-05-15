@@ -3,6 +3,7 @@
 package keychain
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -15,8 +16,9 @@ import (
 )
 
 type ExecKeychain struct {
-	name string
-	path string
+	name     string
+	path     string
+	username string
 }
 
 func NewExecKeychain() *ExecKeychain {
@@ -26,7 +28,7 @@ func NewExecKeychain() *ExecKeychain {
 	}
 	u, _ := user.Current()
 	path := filepath.Join(u.HomeDir, "Library", "Keychains", name+".keychain-db")
-	return &ExecKeychain{name: name, path: path}
+	return &ExecKeychain{name: name, path: path, username: u.Username}
 }
 
 func (k *ExecKeychain) Path() string {
@@ -127,15 +129,18 @@ func (k *ExecKeychain) ListServices() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dump-keychain: %w", err)
 	}
-	const marker = `="op-keychain:`
+	// "svce"<blob>="op-keychain:..." の行だけを対象にする。
+	// dump-keychain は同じ service 名を 0x00000007 行と "svce" 行の2行に出力するため、
+	// "svce" に絞らないと重複が生じる。
+	const marker = `"svce"<blob>="op-keychain:`
 	var services []string
 	for _, line := range strings.Split(string(out), "\n") {
 		i := strings.Index(line, marker)
 		if i < 0 {
 			continue
 		}
-		// line[i:] looks like `="op-keychain:abc..."`; skip `="` to get `op-keychain:abc..."`
-		rest := line[i+2:]
+		// `"svce"<blob>="op-keychain:abc..."` の `"op-keychain:` 以降を取り出す
+		rest := line[i+len(`"svce"<blob>="`):] // op-keychain:abc..."
 		j := strings.Index(rest, `"`)
 		if j > 0 {
 			services = append(services, rest[:j])
@@ -144,7 +149,43 @@ func (k *ExecKeychain) ListServices() ([]string, error) {
 	return services, nil
 }
 
-// Get, Set, Remove は Step 6a で実装する
-func (k *ExecKeychain) Get(service string) (string, error) { panic("not implemented") }
-func (k *ExecKeychain) Set(service, value string) error    { panic("not implemented") }
-func (k *ExecKeychain) Remove(service string) error        { panic("not implemented") }
+func (k *ExecKeychain) Get(service string) (string, error) {
+	out, err := exec.Command("security", "find-generic-password",
+		"-s", service, "-a", k.username, "-w", k.path).Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 44 {
+			return "", ErrNotFound
+		}
+		return "", ErrLocked
+	}
+	raw := strings.TrimRight(string(out), "\n")
+	if strings.HasPrefix(raw, "0x") {
+		decoded, decErr := hex.DecodeString(raw[2:])
+		if decErr != nil {
+			return "", fmt.Errorf("hex decode: %w", decErr)
+		}
+		return string(decoded), nil
+	}
+	return raw, nil
+}
+
+func (k *ExecKeychain) Set(service, value string) error {
+	err := exec.Command("security", "add-generic-password",
+		"-U", "-s", service, "-a", k.username, "-w", value, k.path).Run()
+	if err != nil {
+		return ErrLocked
+	}
+	return nil
+}
+
+func (k *ExecKeychain) Remove(service string) error {
+	err := exec.Command("security", "delete-generic-password",
+		"-s", service, "-a", k.username, k.path).Run()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 44 {
+			return ErrNotFound
+		}
+		return ErrLocked
+	}
+	return nil
+}

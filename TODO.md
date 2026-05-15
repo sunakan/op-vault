@@ -255,7 +255,7 @@ bash e2e_test.sh 5
 
 ## Step 6a: keychain_exec.go（Get / Set / Remove / ListServices）
 
-- [ ] `keychain_exec.go` に上記4メソッドを追加
+- [x] `keychain_exec.go` に上記4メソッドを追加
 
 ### 動作確認
 
@@ -268,7 +268,7 @@ go build ./...
 
 ## Step 6b: `list` コマンド
 
-- [ ] `internal/cli/list.go` 実装
+- [x] `internal/cli/list.go` 実装
 
 ### 動作確認
 
@@ -298,7 +298,7 @@ OP_KEYCHAIN_NAME=op-keychain-test go run ./cmd/op-keychain clear --yes
 
 ## Step 6c: `remove` コマンド
 
-- [ ] `internal/cli/remove.go` 実装
+- [x] `internal/cli/remove.go` 実装
 
 ### 動作確認
 
