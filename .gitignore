@@ -1,0 +1,3 @@
+op-keychain
+!cmd/op-keychain
+!cmd/op-keychain/*
