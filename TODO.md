@@ -442,9 +442,9 @@ OP_KEYCHAIN_NAME=op-keychain-test go run ./cmd/op-keychain clear --yes
 
 ## Step 9a: fake 実装 + 純粋関数テスト
 
-- [ ] `internal/keychain/fake/fake.go`: `Keychain` interface の fake 実装
-- [ ] `internal/op/fake/fake.go`: `Client` interface の fake 実装
-- [ ] `internal/op/ref_test.go`: `ParseRef` テーブル駆動テスト
+- [x] `internal/keychain/fake/fake.go`: `Keychain` interface の fake 実装
+- [x] `internal/op/fake/fake.go`: `Client` interface の fake 実装
+- [x] `internal/op/ref_test.go`: `ParseRef` テーブル駆動テスト
 
 ### 動作確認
 
