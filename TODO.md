@@ -344,7 +344,7 @@ bash e2e_test.sh 6
 
 **前提: `go get github.com/1password/onepassword-sdk-go` 済み**
 
-- [ ] `internal/op/client.go`: `Client` interface + SDK 実装（`Resolve` / `ItemTitle`）
+- [x] `internal/op/client.go`: `Client` interface + SDK 実装（`Resolve` / `ItemTitle`）
 
 ### 動作確認
 
@@ -357,7 +357,7 @@ CGO_ENABLED=1 go build ./...
 
 ## Step 7b: `internal/logging` パッケージ
 
-- [ ] `internal/logging/logging.go`: slog 初期化（`OP_KEYCHAIN_DEBUG` 対応）
+- [x] `internal/logging/logging.go`: slog 初期化（`OP_KEYCHAIN_DEBUG` 対応）
 
 ### 動作確認
 
@@ -372,8 +372,8 @@ go build ./...
 
 **前提: 1Password Desktop App が起動・ログイン済みであること**
 
-- [ ] `internal/cli/read.go` 実装（keychain 自動作成 + SDK fetch + keychain 保存）
-- [ ] `main.go` に DI（keychain と op.Client の組み立て）を追加
+- [x] `internal/cli/read.go` 実装（keychain 自動作成 + SDK fetch + keychain 保存）
+- [x] `main.go` に DI（keychain と op.Client の組み立て）を追加
 
 ### 動作確認
 

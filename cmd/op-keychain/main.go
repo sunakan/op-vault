@@ -9,13 +9,13 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/sunakan/op-keychain/internal/cli"
 	"github.com/sunakan/op-keychain/internal/keychain"
-	"github.com/sunakan/op-keychain/internal/op"
+	"github.com/sunakan/op-keychain/internal/logging"
 )
 
 var version = "dev"
 
 type CLI struct {
-	Read           ReadCmd               `cmd:"" help:"Read a secret with cache"`
+	Read           cli.ReadCmd           `cmd:"" help:"Read a secret with cache"`
 	Remove         cli.RemoveCmd         `cmd:"" help:"Remove a cached entry"`
 	Clear          cli.ClearCmd          `cmd:"" help:"Clear all cache"`
 	List           cli.ListCmd           `cmd:"" help:"List cached entries"`
@@ -24,20 +24,6 @@ type CLI struct {
 	SetIdleTimeout cli.SetIdleTimeoutCmd `cmd:"" name:"set-idle-timeout" help:"Set auto-lock timeout"`
 	Init           cli.InitCmd           `cmd:"" help:"Initialize the keychain"`
 	Version        cli.VersionCmd        `cmd:"" help:"Print version"`
-}
-
-type ReadCmd struct {
-	Ref     string `arg:"" help:"op://vault/item[/field]"`
-	Account string `short:"a" name:"account" optional:"" env:"OP_ACCOUNT" help:"1Password account name"`
-}
-
-func (c *ReadCmd) Run() error {
-	if _, err := op.ParseRef(c.Ref); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(2)
-	}
-	fmt.Println("not implemented")
-	return nil
 }
 
 type RefreshCmd struct {
@@ -50,9 +36,12 @@ func (c *RefreshCmd) Run() error {
 }
 
 func main() {
+	logging.Init()
 	kc := keychain.NewExecKeychain()
 	var cliCmd CLI
 	cliCmd.Version.Version = version
+	cliCmd.Read.KC = kc
+	cliCmd.Read.AppVersion = version
 	cliCmd.Init.KC = kc
 	cliCmd.Clear.KC = kc
 	cliCmd.Status.KC = kc
