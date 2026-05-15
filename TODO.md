@@ -183,7 +183,7 @@ bash e2e_test.sh 4
 
 ## Step 5a: keychain_exec.go（GetIdleTimeout / SetIdleTimeout / Unlock / IsLocked）
 
-- [ ] `keychain_exec.go` に上記4メソッドを追加
+- [x] `keychain_exec.go` に上記4メソッドを追加
 
 ### 動作確認
 
@@ -196,7 +196,7 @@ go build ./...
 
 ## Step 5b: `status` コマンド
 
-- [ ] `internal/cli/status.go` 実装
+- [x] `internal/cli/status.go` 実装
 
 ### 動作確認
 
@@ -224,7 +224,7 @@ OP_KEYCHAIN_NAME=op-keychain-test go run ./cmd/op-keychain clear --yes
 
 ## Step 5c: `set-idle-timeout` コマンド
 
-- [ ] `internal/cli/set_idle_timeout.go` 実装
+- [x] `internal/cli/set_idle_timeout.go` 実装
 
 ### 動作確認
 

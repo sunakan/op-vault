@@ -304,8 +304,9 @@ if should_run 5; then
     security lock-keychain "$KEYCHAIN_PATH"
     run_cmd status
     assert_exit 0 "status (locked)"
-    assert_out "lock status:  locked" "status (locked): lock status"
-    assert_out "unknown (locked)"     "status (locked): entries"
+    assert_out "lock status:  locked"        "status (locked): lock status"
+    assert_out "unknown (locked)"            "status (locked): entries"
+    assert_out "locked (unlock to view)"     "status (locked): idle-timeout"
 
     teardown_keychain
 fi

@@ -240,12 +240,12 @@ entries:      5
 keychain あり(ロック中):
 ```
 keychain:     /Users/username/Library/Keychains/op-keychain.keychain-db
-idle-timeout: 3600s
+idle-timeout: locked (unlock to view)
 lock status:  locked
 entries:      unknown (locked)
 ```
 
-ロック状態の判定: 最初の entry に `find-generic-password -w` でアクセスを試み、成功すれば unlocked、失敗すれば locked。entry が 0 件の場合は `lock status: unlocked` として `entries: 0` を出力する。
+ロック状態の判定: CGo (`SecKeychainGetStatus`) でダイアログなしに判定する。`idle-timeout` はロック中に `security show-keychain-info` を呼ぶと GUI ダイアログが出るため、ロック中は `locked (unlock to view)` と表示する。entry が 0 件の場合は `lock status: unlocked` として `entries: 0` を出力する。
 
 #### 4.3.7 `set-idle-timeout <seconds>`
 
