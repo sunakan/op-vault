@@ -37,14 +37,14 @@ func AutoCreate(kc keychain.Keychain) error {
 }
 
 func initInteractive(kc keychain.Keychain) error {
-	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+	input, cleanup, err := openInputFile()
 	if err != nil {
-		return fmt.Errorf("open /dev/tty: %w", err)
+		return err
 	}
-	defer tty.Close()
+	defer cleanup()
 
-	fmt.Fprint(tty, "Set a password for the keychain? [y/N]: ")
-	scanner := bufio.NewScanner(tty)
+	fmt.Fprint(os.Stderr, "Set a password for the keychain? [y/N]: ")
+	scanner := bufio.NewScanner(input)
 	scanner.Scan()
 	answer := strings.TrimSpace(scanner.Text())
 
@@ -52,16 +52,16 @@ func initInteractive(kc keychain.Keychain) error {
 		return createKeychain(kc, "")
 	}
 
-	fmt.Fprint(tty, "Enter password: ")
-	pw1, err := term.ReadPassword(int(tty.Fd()))
-	fmt.Fprintln(tty)
+	fmt.Fprint(os.Stderr, "Enter password: ")
+	pw1, err := term.ReadPassword(int(input.Fd()))
+	fmt.Fprintln(os.Stderr)
 	if err != nil {
 		return fmt.Errorf("read password: %w", err)
 	}
 
-	fmt.Fprint(tty, "Confirm password: ")
-	pw2, err := term.ReadPassword(int(tty.Fd()))
-	fmt.Fprintln(tty)
+	fmt.Fprint(os.Stderr, "Confirm password: ")
+	pw2, err := term.ReadPassword(int(input.Fd()))
+	fmt.Fprintln(os.Stderr)
 	if err != nil {
 		return fmt.Errorf("read password: %w", err)
 	}
@@ -72,6 +72,19 @@ func initInteractive(kc keychain.Keychain) error {
 	}
 
 	return createKeychain(kc, string(pw1))
+}
+
+// openInputFile returns stdin if it is a terminal (works with expect),
+// otherwise falls back to /dev/tty (works when called from a subshell).
+func openInputFile() (f *os.File, cleanup func(), err error) {
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		return os.Stdin, func() {}, nil
+	}
+	f, err = os.OpenFile("/dev/tty", os.O_RDWR, 0)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open /dev/tty: %w", err)
+	}
+	return f, func() { f.Close() }, nil
 }
 
 func createKeychain(kc keychain.Keychain, password string) error {

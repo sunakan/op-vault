@@ -27,14 +27,14 @@ func (c *ClearCmd) Run() error {
 	}
 
 	if !c.Yes {
-		tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+		input, cleanup, err := openInputFile()
 		if err != nil {
-			return fmt.Errorf("open /dev/tty: %w", err)
+			return err
 		}
-		defer tty.Close()
+		defer cleanup()
 
-		fmt.Fprint(tty, "Are you sure you want to clear all cache? [y/N]: ")
-		scanner := bufio.NewScanner(tty)
+		fmt.Fprint(os.Stderr, "Are you sure you want to clear all cache? [y/N]: ")
+		scanner := bufio.NewScanner(input)
 		scanner.Scan()
 		answer := strings.TrimSpace(scanner.Text())
 		if answer != "y" && answer != "Y" {
