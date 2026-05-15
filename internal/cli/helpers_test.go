@@ -40,12 +40,12 @@ func runCapture(fn func() error) (outStr, errStr string, exitCode int, runErr er
 	os.Stderr = origErr
 	osExit = origExit
 
-	wOut.Close()
-	wErr.Close()
+	_ = wOut.Close()
+	_ = wErr.Close()
 
 	var bOut, bErr strings.Builder
-	io.Copy(&bOut, rOut)
-	io.Copy(&bErr, rErr)
+	_, _ = io.Copy(&bOut, rOut)
+	_, _ = io.Copy(&bErr, rErr)
 	outStr = bOut.String()
 	errStr = bErr.String()
 	return

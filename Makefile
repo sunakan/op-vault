@@ -20,6 +20,10 @@ unit: ## Go 版ユニットテスト (Step 9)
 build: ## Go 版バイナリビルド (Step 10)
 	@CGO_ENABLED=1 go build ./cmd/op-keychain
 
+.PHONY: lint
+lint: ## Go 版 lint (Step 10)
+	@golangci-lint run
+
 .PHONY: list
 list: ## キャッシュ一覧を表示
 	@./op-keychain.sh list

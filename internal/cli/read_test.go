@@ -206,7 +206,7 @@ func TestReadAccountFieldStored(t *testing.T) {
 	op := opfake.New()
 	op.Secrets[ref] = "val"
 
-	runCapture(func() error {
+	_, _, _, _ = runCapture(func() error {
 		return (&ReadCmd{Ref: ref, KC: kc, OP: op, Account: ""}).Run()
 	})
 

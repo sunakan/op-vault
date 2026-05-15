@@ -84,7 +84,7 @@ func openInputFile() (f *os.File, cleanup func(), err error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("open /dev/tty: %w", err)
 	}
-	return f, func() { f.Close() }, nil
+	return f, func() { _ = f.Close() }, nil
 }
 
 func createKeychain(kc keychain.Keychain, password string) error {
