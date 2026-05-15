@@ -108,7 +108,7 @@ go test ./internal/keychain/...
 
 ## Step 4b: keychain_exec.go（Exists / Create / Delete / AddToList / Path）
 
-- [ ] `internal/keychain/keychain_exec.go` に上記5メソッドを実装
+- [x] `internal/keychain/keychain_exec.go` に上記5メソッドを実装
 
 ### 動作確認
 
