@@ -88,10 +88,10 @@ go run ./cmd/op-keychain read "op://vault/item/field"; echo $?  # → 0
 
 ## Step 4a: keychain パッケージ骨格（interface・型・Service 関数）
 
-- [ ] `internal/keychain/keychain.go`: `Keychain` interface + `ErrLocked` / `ErrNotFound`
-- [ ] `internal/keychain/entry.go`: `Entry` 型（JSON marshal/unmarshal）
-- [ ] `internal/keychain/service.go`: `Service()` 関数（SHA256）
-- [ ] `internal/keychain/service_test.go`: bash 版 `_service()` と同じハッシュ値を返すことを確認
+- [x] `internal/keychain/keychain.go`: `Keychain` interface + `ErrLocked` / `ErrNotFound`
+- [x] `internal/keychain/entry.go`: `Entry` 型（JSON marshal/unmarshal）
+- [x] `internal/keychain/service.go`: `Service()` 関数（SHA256）
+- [x] `internal/keychain/service_test.go`: bash 版 `_service()` と同じハッシュ値を返すことを確認
 
 ### 動作確認
 
