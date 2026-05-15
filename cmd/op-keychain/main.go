@@ -8,6 +8,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/sunakan/op-keychain/internal/cli"
+	"github.com/sunakan/op-keychain/internal/keychain"
 	"github.com/sunakan/op-keychain/internal/op"
 )
 
@@ -21,7 +22,7 @@ type CLI struct {
 	Refresh        RefreshCmd        `cmd:"" help:"Refresh all entries from 1Password"`
 	Status         StatusCmd         `cmd:"" help:"Show keychain status"`
 	SetIdleTimeout SetIdleTimeoutCmd `cmd:"" name:"set-idle-timeout" help:"Set auto-lock timeout"`
-	Init           InitCmd           `cmd:"" help:"Initialize the keychain"`
+	Init           cli.InitCmd       `cmd:"" help:"Initialize the keychain"`
 	Version        cli.VersionCmd    `cmd:"" help:"Print version"`
 }
 
@@ -93,16 +94,11 @@ func (c *SetIdleTimeoutCmd) Run() error {
 	return nil
 }
 
-type InitCmd struct{}
-
-func (c *InitCmd) Run() error {
-	fmt.Println("not implemented")
-	return nil
-}
-
 func main() {
+	kc := keychain.NewExecKeychain()
 	var cliCmd CLI
 	cliCmd.Version.Version = version
+	cliCmd.Init.KC = kc
 	ctx := kong.Parse(&cliCmd,
 		kong.Name("op-keychain"),
 		kong.Description("Cache op:// secrets in macOS Keychain"),

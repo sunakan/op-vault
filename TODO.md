@@ -121,7 +121,7 @@ go build ./...
 
 ## Step 4c: `init` コマンド
 
-- [ ] `internal/cli/init.go` 実装（keychain 自動作成の共通ロジックも含む）
+- [x] `internal/cli/init.go` 実装（keychain 自動作成の共通ロジックも含む）
 
 ### 動作確認
 
