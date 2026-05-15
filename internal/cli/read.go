@@ -25,7 +25,7 @@ type ReadCmd struct {
 func (c *ReadCmd) Run() error {
 	if _, err := op.ParseRef(c.Ref); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(2)
+		osExit(2)
 	}
 
 	exists, err := c.KC.Exists()
@@ -54,7 +54,7 @@ func (c *ReadCmd) Run() error {
 	opClient, err := c.opClient()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: failed to initialize 1Password client: %v\n", err)
-		os.Exit(1)
+		osExit(1)
 	}
 
 	ctx := context.Background()
@@ -62,7 +62,7 @@ func (c *ReadCmd) Run() error {
 	if err != nil {
 		slog.Debug("resolve failed", "ref", c.Ref, "err", err)
 		fmt.Fprintf(os.Stderr, "error: failed to resolve: %s\n", c.Ref)
-		os.Exit(1)
+		osExit(1)
 	}
 
 	name, err := opClient.ItemTitle(ctx, c.Ref)

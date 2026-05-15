@@ -5,6 +5,7 @@ package cli
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -12,8 +13,9 @@ import (
 )
 
 type ClearCmd struct {
-	Yes bool              `name:"yes" help:"Skip confirmation prompt"`
-	KC  keychain.Keychain `kong:"-"`
+	Yes   bool              `name:"yes" help:"Skip confirmation prompt"`
+	KC    keychain.Keychain `kong:"-"`
+	Input io.Reader         `kong:"-"`
 }
 
 func (c *ClearCmd) Run() error {
@@ -27,14 +29,20 @@ func (c *ClearCmd) Run() error {
 	}
 
 	if !c.Yes {
-		input, cleanup, err := openInputFile()
-		if err != nil {
-			return err
+		var reader io.Reader
+		if c.Input != nil {
+			reader = c.Input
+		} else {
+			input, cleanup, err := openInputFile()
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			reader = input
 		}
-		defer cleanup()
 
 		fmt.Fprint(os.Stderr, "Are you sure you want to clear all cache? [y/N]: ")
-		scanner := bufio.NewScanner(input)
+		scanner := bufio.NewScanner(reader)
 		scanner.Scan()
 		answer := strings.TrimSpace(scanner.Text())
 		if answer != "y" && answer != "Y" {

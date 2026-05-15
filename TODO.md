@@ -457,7 +457,7 @@ go test -short ./internal/keychain/... ./internal/op/...
 
 ## Step 9b: CLI コマンドテスト
 
-- [ ] `internal/cli/*_test.go`: SPEC §7.3 の必須テストケースを網羅
+- [x] `internal/cli/*_test.go`: SPEC §7.3 の必須テストケースを網羅
 
 ### 動作確認
 

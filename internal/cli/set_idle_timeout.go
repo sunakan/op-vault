@@ -17,7 +17,7 @@ type SetIdleTimeoutCmd struct {
 func (c *SetIdleTimeoutCmd) Run() error {
 	if c.Seconds <= 0 {
 		fmt.Fprintf(os.Stderr, "error: seconds must be a positive integer: %d\n", c.Seconds)
-		os.Exit(2)
+		osExit(2)
 	}
 
 	exists, err := c.KC.Exists()

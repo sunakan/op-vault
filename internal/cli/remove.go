@@ -19,7 +19,7 @@ type RemoveCmd struct {
 func (c *RemoveCmd) Run() error {
 	if _, err := op.ParseRef(c.Ref); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(2)
+		osExit(2)
 	}
 
 	exists, err := c.KC.Exists()
@@ -28,7 +28,7 @@ func (c *RemoveCmd) Run() error {
 	}
 	if !exists {
 		fmt.Fprintln(os.Stderr, "error: no keychain")
-		os.Exit(1)
+		osExit(1)
 	}
 
 	svc := keychain.Service(c.Ref)
@@ -41,7 +41,7 @@ func (c *RemoveCmd) Run() error {
 	}
 	if errors.Is(err, keychain.ErrNotFound) {
 		fmt.Fprintf(os.Stderr, "error: cache not found: %s\n", c.Ref)
-		os.Exit(1)
+		osExit(1)
 	}
 	if err != nil {
 		return err
