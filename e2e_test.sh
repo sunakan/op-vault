@@ -63,6 +63,14 @@ assert_exit() {
     fi
 }
 
+assert_not_exit() {
+    if [ "$STATUS" -ne "$1" ]; then
+        _ok "exit ≠ $1  $2"
+    else
+        _ng "exit = $1 (want ≠ $1)  $2"
+    fi
+}
+
 assert_out() {
     if printf '%s' "$STDOUT" | grep -qF "$1"; then
         _ok "stdout '$1'  $2"
@@ -79,6 +87,14 @@ assert_err() {
     fi
 }
 
+assert_not_err() {
+    if ! printf '%s' "$STDERR" | grep -qF "$1"; then
+        _ok "stderr に '$1' がない  $2"
+    else
+        _ng "stderr に '$1' がある（あってはいけない）  $2"
+    fi
+}
+
 # コマンドを実行し、STATUS / STDOUT / STDERR に格納する
 # </dev/null: 対話プロンプトが stdin をブロックしないようにする
 run_cmd() {
@@ -89,36 +105,17 @@ run_cmd() {
     STDERR=$(cat "$STDERR_TMP")
 }
 
-# expect 経由で init を実行（空パスワード: プロンプトに N を入力）
-init_with_expect() {
-    expect -c "
-        set timeout 10
-        set env(OP_KEYCHAIN_NAME) {$TESTCHAIN}
-        spawn $BIN init
-        expect {
-            {Set a password} { send {N\r}; exp_continue }
-            eof
-        }
-    " >"$STDOUT_TMP" 2>"$STDERR_TMP"
-    STATUS=$?
-    STDOUT=$(cat "$STDOUT_TMP")
-    STDERR=$(cat "$STDERR_TMP")
-}
-
-# expect がない場合のフォールバック: security コマンドで直接 keychain を作成
-setup_keychain_directly() {
-    _skip "expect 未インストール: security コマンドで直接 keychain を作成（init 対話テストはスキップ）"
+# keychain のセットアップ
+# expect spawn + security はセッション境界で securityd のコンテキストが取れず hang するため
+# init コマンドを経由せず security を直接呼ぶ
+setup_keychain() {
     security create-keychain -p "" "$KEYCHAIN_PATH" 2>/dev/null || true
     security set-keychain-settings -t 3600 "$KEYCHAIN_PATH"
-}
-
-# keychain のセットアップ（expect があれば init 経由、なければ security 直接）
-setup_keychain() {
-    if command -v expect &>/dev/null; then
-        init_with_expect
-    else
-        setup_keychain_directly
-    fi
+    # xargs で引用符・前後空白を除去してから -s に渡す
+    # shellcheck disable=SC2046
+    security list-keychains -d user -s \
+        $(security list-keychains -d user | xargs) \
+        "$KEYCHAIN_PATH"
 }
 
 # keychain を削除する
@@ -199,11 +196,15 @@ if should_run 3; then
     run_cmd remove "op://bad"
     assert_exit 2 "remove 不正 ref: op://bad"
 
+    # 正常 ref の検証: exit 2 にならず invalid ref format が出ないことを確認する。
+    # exit 0 では検証しない。Step 7 実装後は 1Password へ接続して exit 1 になるため。
     run_cmd read "op://vault/item"
-    assert_exit 0 "read 正常 ref (2 セグメント)"
+    assert_not_exit 2 "read 正常 ref: ref validation エラーなし (2 セグメント)"
+    assert_not_err "invalid ref format" "read 正常 ref: invalid ref format なし (2 セグメント)"
 
     run_cmd read "op://vault/item/field"
-    assert_exit 0 "read 正常 ref (3 セグメント)"
+    assert_not_exit 2 "read 正常 ref: ref validation エラーなし (3 セグメント)"
+    assert_not_err "invalid ref format" "read 正常 ref: invalid ref format なし (3 セグメント)"
 fi
 
 # ─────────────────────────────────────────────────────────────────
@@ -220,16 +221,8 @@ if should_run 4; then
     # securityd のログインコンテキストが取得できず security コマンドがハングする。
     # そのため外側シェル（ログインセッション）から直接 security で keychain を作る。
     _skip "init の対話テスト: expect spawn + security はセッション境界で hang するためスキップ"
-    security create-keychain -p "" "$KEYCHAIN_PATH"
-    security set-keychain-settings -t 3600 "$KEYCHAIN_PATH"
-    # list-keychains に追加（run_cmd init の代替）
-    # xargs で引用符・前後空白を除去してから -s に渡す
-    # shellcheck disable=SC2046
-    security list-keychains -d user -s \
-        $(security list-keychains -d user | xargs) \
-        "$KEYCHAIN_PATH"
+    setup_keychain
 
-    # 直接セットアップ時はファイル存在で確認（list-keychains 追加はベストエフォート）
     if [ -f "$KEYCHAIN_PATH" ]; then
         _ok "init: keychain ファイルが作成された"
     else
@@ -240,6 +233,9 @@ if should_run 4; then
     run_cmd init
     assert_exit 0 "init 2回目"
     assert_out "already initialized" "init 2回目の出力"
+
+    # --yes なしの対話テストは /dev/tty 経由のため自動化不可
+    _skip "clear --yes なし (y/N 対話): /dev/tty 経由のため自動化不可"
 
     # clear --yes
     run_cmd clear --yes
@@ -266,14 +262,22 @@ if should_run 5; then
     echo ""
     echo "=== Step 5: status / set-idle-timeout ==="
 
+    teardown_keychain
+
+    # keychain なしの status
+    run_cmd status
+    assert_exit 0 "status (keychain なし)"
+    assert_out "keychain: none" "status (keychain なし): keychain: none"
+
     setup_keychain
 
     # アンロック状態の status
     run_cmd status
     assert_exit 0 "status (unlocked)"
-    assert_out "unlocked"        "status: lock status"
-    assert_out "3600s"           "status: idle-timeout"
-    assert_out "entries:      0" "status: entries"
+    assert_out "$KEYCHAIN_PATH"          "status: keychain パス"
+    assert_out "lock status:  unlocked"  "status: lock status"
+    assert_out "3600s"                   "status: idle-timeout"
+    assert_out "entries:      0"         "status: entries"
 
     # set-idle-timeout 正常系
     run_cmd set-idle-timeout 1800
@@ -293,12 +297,15 @@ if should_run 5; then
     run_cmd set-idle-timeout abc
     assert_exit 2 "set-idle-timeout abc"
 
+    run_cmd set-idle-timeout
+    assert_exit 2 "set-idle-timeout 引数なし"
+
     # ロック状態での status
     security lock-keychain "$KEYCHAIN_PATH"
     run_cmd status
     assert_exit 0 "status (locked)"
-    assert_out "locked"           "status (locked): lock status"
-    assert_out "unknown (locked)" "status (locked): entries"
+    assert_out "lock status:  locked" "status (locked): lock status"
+    assert_out "unknown (locked)"     "status (locked): entries"
 
     teardown_keychain
 fi
@@ -311,11 +318,18 @@ if should_run 6; then
     echo ""
     echo "=== Step 6: list / remove ==="
 
-    setup_keychain
+    teardown_keychain
 
     REF="op://Test/test02/password"
     SVCNAME="op-keychain:$(printf '%s' "$REF" | shasum -a 256 | cut -d' ' -f1)"
     JSON="{\"ref\":\"${REF}\",\"name\":\"test02\",\"value\":\"dummy-secret\",\"account\":\"\"}"
+
+    # keychain なしの remove
+    run_cmd remove "$REF"
+    assert_exit 1 "remove (keychain なし)"
+    assert_err "no keychain" "remove (keychain なし) エラーメッセージ"
+
+    setup_keychain
 
     # 0件の list
     run_cmd list
@@ -335,20 +349,59 @@ if should_run 6; then
     security add-generic-password \
         -s "$SVCNAME" -a "$(whoami)" -w "$JSON" "$KEYCHAIN_PATH"
 
-    # エントリあり状態の list
+    # エントリあり状態の list (1件)
     run_cmd list
     assert_exit 0 "list (1件)"
     assert_out "test02" "list (1件): name"
     assert_out "$REF"   "list (1件): ref"
+
+    # 複数件 + アルファベット順
+    # 意図的に逆順で登録してソート確認: zebra → apple → test02 の順で追加
+    REF_A="op://Test/apple/password"
+    REF_Z="op://Test/zebra/password"
+    SVC_A="op-keychain:$(printf '%s' "$REF_A" | shasum -a 256 | cut -d' ' -f1)"
+    SVC_Z="op-keychain:$(printf '%s' "$REF_Z" | shasum -a 256 | cut -d' ' -f1)"
+    JSON_A="{\"ref\":\"${REF_A}\",\"name\":\"apple\",\"value\":\"dummy\",\"account\":\"\"}"
+    JSON_Z="{\"ref\":\"${REF_Z}\",\"name\":\"zebra\",\"value\":\"dummy\",\"account\":\"\"}"
+    security add-generic-password -s "$SVC_Z" -a "$(whoami)" -w "$JSON_Z" "$KEYCHAIN_PATH"
+    security add-generic-password -s "$SVC_A" -a "$(whoami)" -w "$JSON_A" "$KEYCHAIN_PATH"
+
+    run_cmd list
+    assert_exit 0 "list (3件)"
+    LINE_A=$(printf '%s' "$STDOUT" | grep -n "apple"  | cut -d: -f1)
+    LINE_T=$(printf '%s' "$STDOUT" | grep -n "test02" | cut -d: -f1)
+    LINE_Z=$(printf '%s' "$STDOUT" | grep -n "zebra"  | cut -d: -f1)
+    if [ -n "$LINE_A" ] && [ -n "$LINE_T" ] && [ -n "$LINE_Z" ] \
+        && [ "$LINE_A" -lt "$LINE_T" ] && [ "$LINE_T" -lt "$LINE_Z" ]; then
+        _ok "list: アルファベット順 (apple < test02 < zebra)"
+    else
+        _ng "list: アルファベット順が正しくない (apple=${LINE_A:-?} test02=${LINE_T:-?} zebra=${LINE_Z:-?})"
+    fi
+
+    # name 空エントリは "  <ref>" 形式（括弧なし）で表示される
+    REF_NONAME="op://Test/noname/password"
+    SVC_NONAME="op-keychain:$(printf '%s' "$REF_NONAME" | shasum -a 256 | cut -d' ' -f1)"
+    JSON_NONAME="{\"ref\":\"${REF_NONAME}\",\"name\":\"\",\"value\":\"dummy\",\"account\":\"\"}"
+    security add-generic-password -s "$SVC_NONAME" -a "$(whoami)" -w "$JSON_NONAME" "$KEYCHAIN_PATH"
+
+    run_cmd list
+    if printf '%s' "$STDOUT" | grep -qF "  $REF_NONAME"; then
+        _ok "list: name 空エントリのフォーマット (  <ref>)"
+    else
+        _ng "list: name 空エントリのフォーマットが違う  (actual: $(printf '%s' "$STDOUT" | grep "$REF_NONAME" || true))"
+    fi
 
     # remove 正常系
     run_cmd remove "$REF"
     assert_exit 0 "remove (entry あり)"
     assert_out "removed:" "remove (entry あり) の出力"
 
-    # 削除後は 0件
     run_cmd list
-    assert_out "no cache" "remove 後: list = no cache"
+    if ! printf '%s' "$STDOUT" | grep -qF "test02"; then
+        _ok "remove 後: test02 が消えた"
+    else
+        _ng "remove 後: test02 が残っている"
+    fi
 
     # ロック中の remove（unlock して削除できること）
     security add-generic-password \
