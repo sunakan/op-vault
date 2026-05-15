@@ -1,0 +1,31 @@
+version: 2
+
+builds:
+  - id: op-keychain
+    main: ./cmd/op-keychain
+    binary: op-keychain
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=1
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+
+archives:
+  - formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+release:
+  github:
+    owner: sunakan
+    name: op-keychain
+  draft: false
+  prerelease: auto
