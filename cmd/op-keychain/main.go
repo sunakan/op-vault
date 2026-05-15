@@ -8,6 +8,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/sunakan/op-keychain/internal/cli"
+	"github.com/sunakan/op-keychain/internal/op"
 )
 
 var version = "dev"
@@ -30,6 +31,10 @@ type ReadCmd struct {
 }
 
 func (c *ReadCmd) Run() error {
+	if _, err := op.ParseRef(c.Ref); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(2)
+	}
 	fmt.Println("not implemented")
 	return nil
 }
@@ -39,6 +44,10 @@ type RemoveCmd struct {
 }
 
 func (c *RemoveCmd) Run() error {
+	if _, err := op.ParseRef(c.Ref); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(2)
+	}
 	fmt.Println("not implemented")
 	return nil
 }

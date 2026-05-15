@@ -72,8 +72,8 @@ echo $?   # → 0
 
 ## Step 3: ref バリデーション
 
-- [ ] `internal/op/ref.go`: `ParseRef()` 実装
-- [ ] `read` / `remove` コマンドのスタブに組み込む
+- [x] `internal/op/ref.go`: `ParseRef()` 実装
+- [x] `read` / `remove` コマンドのスタブに組み込む
 
 ### 動作確認
 
