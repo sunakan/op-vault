@@ -3,7 +3,15 @@
 ################################################################################
 .PHONY: build
 build: ## バイナリビルド
-	@CGO_ENABLED=1 go build ./cmd/op-keychain
+	@CGO_ENABLED=1 go build -o op-keychain ./cmd/op-keychain
+
+.PHONY: clean
+clean: ## バイナリ削除
+	@rm -rf op-keychain
+
+.PHONY: e2e-test
+e2e-test: ## e2e-test
+	@./scripts/e2e-test.sh
 
 .PHONY: lint
 lint: ## lint
