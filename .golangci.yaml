@@ -4,6 +4,10 @@ formatters:
   enable:
     - gofumpt
     - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/sunakan/op-keychain
 
 linters:
   default: standard

@@ -16,6 +16,7 @@ e2e-test: ## e2e-test
 .PHONY: fmt
 fmt: ## go fmt
 	@go fmt ./...
+	@golangci-lint fmt
 	@$(MAKE) sh.fmt
 
 .PHONY: lint
