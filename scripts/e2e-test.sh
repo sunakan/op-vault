@@ -14,11 +14,14 @@ set -uo pipefail
 #
 TEST_CHAIN='op-keychain-e2e-test'
 KEYCHAIN_PATH="$HOME/Library/Keychains/${TEST_CHAIN}.keychain-db"
+JAEGER_UI='http://localhost:16686'
+JAEGER_OTLP='http://localhost:4318'
 PASS=0
 FAIL=0
 STATUS=0
 STDOUT=''
 STDERR=''
+TRACES=''
 STDOUT_TMP=$(mktemp)
 STDERR_TMP=$(mktemp)
 
@@ -26,10 +29,11 @@ STDERR_TMP=$(mktemp)
 # Helper
 #
 # cleanup:
-# Clean up test keychain and temp files on exit
+# Clean up test keychain, temp files, and Jaeger on exit
 cleanup() {
   security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
   rm -f "$STDOUT_TMP" "$STDERR_TMP"
+  make down 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -106,12 +110,83 @@ run_cmd() {
   STDERR=$(cat "$STDERR_TMP")
 }
 
-run_cmd_tracing() {
-  OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER=stdout OTEL_RESOURCE_ATTRIBUTES= ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+run_cmd_otlp() {
+  OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER=otlp OP_KEYCHAIN_OTLP_ENDPOINT="$JAEGER_OTLP" OTEL_RESOURCE_ATTRIBUTES= ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
   STDERR=$(cat "$STDERR_TMP")
 }
+
+run_cmd_with_exporter() {
+  local exporter="$1"
+  shift
+  OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER="$exporter" OP_KEYCHAIN_OTLP_ENDPOINT= OTEL_RESOURCE_ATTRIBUTES= ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+  STATUS=$?
+  STDOUT=$(cat "$STDOUT_TMP")
+  STDERR=$(cat "$STDERR_TMP")
+}
+
+wait_for_jaeger() {
+  local i=0
+  # Poll directly instead of relying on Docker healthcheck (start_period adds unnecessary delay)
+  while ! curl -sf "${JAEGER_UI}/" > /dev/null 2>&1; do
+    i=$((i + 1))
+    if [ "$i" -ge 30 ]; then
+      printf '  ERROR  Jaeger did not start within 30s\n' >&2
+      exit 1
+    fi
+    sleep 1
+  done
+}
+
+expect_span_name() {
+  local expected="$1" desc="$2"
+  local actual
+  actual=$(printf '%s' "$TRACES" | jq -r '.data[].spans[].operationName' 2>/dev/null)
+  if printf '%s' "$actual" | grep -qF "$expected"; then
+    _pass "span operationName == '$expected'  $desc"
+  else
+    _fail "span operationName != '$expected'  $desc  (actual: $(printf '%s' "$actual" | tr '\n' ' '))"
+  fi
+}
+
+expect_span_status_error() {
+  local desc="$1"
+  local actual
+  actual=$(printf '%s' "$TRACES" | jq -r '.data[].spans[].tags[] | select(.key == "otel.status_code") | .value' 2>/dev/null)
+  if printf '%s' "$actual" | grep -qF 'ERROR'; then
+    _pass "span otel.status_code == 'ERROR'  $desc"
+  else
+    _fail "span otel.status_code != 'ERROR'  $desc  (actual: $(printf '%s' "$actual" | head -1))"
+  fi
+}
+
+#
+# Prerequisites
+#
+if ! command -v jq > /dev/null 2>&1; then
+  printf '  ERROR  jq is required but not installed\n' >&2
+  exit 1
+fi
+
+#
+# Jaeger
+#
+echo ''
+echo '=== Jaeger ==='
+
+make down 2>/dev/null || true
+if make up 2>/dev/null; then
+  wait_for_jaeger
+  _pass 'Jaeger started'
+else
+  if [[ -t 2 ]]; then
+    printf '\033[31m  ERROR\033[0m  Failed to start Jaeger\n'
+  else
+    printf '  ERROR  Failed to start Jaeger\n'
+  fi
+  exit 1
+fi
 
 #
 # Build
@@ -156,6 +231,26 @@ expect_stdout_contains 'op-keychain' '-h output is in stdout'
 expect_stderr_empty '-h'
 
 #
+# Invalid TRACES_EXPORTER
+#
+echo ''
+echo '=== Invalid TRACES_EXPORTER ==='
+run_cmd_with_exporter invalid version
+expect_exit_code 1 'invalid exporter'
+expect_stdout_empty 'invalid exporter'
+expect_stderr_contains 'unknown OP_KEYCHAIN_TRACES_EXPORTER' 'invalid exporter error message'
+
+#
+# OTLP without endpoint
+#
+echo ''
+echo '=== OTLP without endpoint ==='
+run_cmd_with_exporter otlp version
+expect_exit_code 1 'otlp without endpoint'
+expect_stdout_empty 'otlp without endpoint'
+expect_stderr_contains 'OP_KEYCHAIN_OTLP_ENDPOINT is required' 'otlp endpoint required error message'
+
+#
 # version
 #
 echo ''
@@ -164,15 +259,6 @@ run_cmd version
 expect_exit_code 0 'version'
 expect_stdout_matches '^[0-9]+\.[0-9]+\.[0-9]+$' 'version stdout matches x.y.z'
 expect_stderr_empty 'version'
-
-echo ''
-echo '=== version With tracing ==='
-run_cmd_tracing version
-expect_exit_code 0 'version with tracing'
-expect_stdout_matches '^[0-9]+\.[0-9]+\.[0-9]+$' 'version stdout matches x.y.z with tracing'
-expect_stderr_contains '"Name":"version"' 'version span emitted'
-expect_stderr_contains '"Name":"main"' 'main span emitted'
-expect_stderr_contains '"Code":"Unset"' 'version spans have no error status'
 
 #
 # version --help
@@ -185,6 +271,21 @@ expect_stdout_contains 'version' 'version --help output is in stdout'
 expect_stderr_empty 'version --help'
 
 #
+# version with OTLP
+#
+echo ''
+echo '=== version with OTLP ==='
+START_US=$(( $(date +%s) * 1000000 ))
+run_cmd_otlp version
+expect_exit_code 0 'version with OTLP'
+expect_stdout_matches '^[0-9]+\.[0-9]+\.[0-9]+$' 'version stdout matches x.y.z with OTLP'
+expect_stderr_empty 'version with OTLP'
+sleep 1
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
+expect_span_name 'version' 'version span received by Jaeger'
+expect_span_name 'main' 'main span received by Jaeger'
+
+#
 # Unknown sub command
 #
 echo ''
@@ -194,13 +295,19 @@ expect_exit_code 2 'unknown sub command'
 expect_stdout_empty 'unknown sub command'
 expect_stderr_contains 'error:' 'unknown sub command'
 
+#
+# Unknown sub command with OTLP
+#
 echo ''
-echo '=== Unknown sub command with tracing ==='
-run_cmd_tracing unknown
-expect_exit_code 2 'unknown sub command with tracing'
-expect_stdout_empty 'unknown sub command with tracing'
-expect_stderr_contains '"Name":"main"' 'main span emitted'
-expect_stderr_contains '"Code":"Error"' 'unknown sub command span has error status'
+echo '=== Unknown sub command with OTLP ==='
+START_US=$(( $(date +%s) * 1000000 ))
+run_cmd_otlp unknown
+expect_exit_code 2 'unknown sub command with OTLP'
+expect_stdout_empty 'unknown sub command with OTLP'
+sleep 1
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
+expect_span_name 'main' 'main span received by Jaeger'
+expect_span_status_error 'main span has error status'
 
 #
 # No subcommand
