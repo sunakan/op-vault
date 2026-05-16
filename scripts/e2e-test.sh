@@ -34,7 +34,7 @@ cleanup() {
 trap cleanup EXIT
 
 _pass() {
-  PASS=$((PASS + 1));
+  PASS=$((PASS + 1))
   if [[ -t 2 ]]; then
     printf '\033[32m  PASS\033[0m  %s\n' "$1"
   else
@@ -43,7 +43,7 @@ _pass() {
 }
 
 _fail() {
-  FAIL=$((FAIL + 1));
+  FAIL=$((FAIL + 1))
   if [[ -t 2 ]]; then
     printf '\033[31m  FAIL\033[0m  %s\n' "$1"
   else

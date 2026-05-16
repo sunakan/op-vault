@@ -18,6 +18,27 @@ lint: ## lint
 	@golangci-lint run
 
 ################################################################################
+# Tool
+################################################################################
+USER_ID := $(shell id -u)
+GROUP_ID := $(shell id -g)
+
+# docker: mvdan/shfmtは作者製
+# https://hub.docker.com/r/mvdan/shfmt/dockerfile
+SHFMT_VERSION := v3.13.1
+.PHONY: sh.fmt
+sh.fmt: ## scripts/以下をformat
+	@docker run --rm -i -u "${USER_ID}:${GROUP_ID}" --mount type=bind,source=${PWD}/scripts/,target=/scripts/ -w /scripts mvdan/shfmt:${SHFMT_VERSION} -i 2 -w .
+
+# docker: koalaman/shellcheck は作者製
+# https://hub.docker.com/r/koalaman/shellcheck
+SHELLCHECK_VERSION := v0.11.0
+.PHONY: sh.lint
+sh.lint: ## format
+	$(eval SH_FILES := $(shell ls -1 scripts/*.sh | xargs basename))
+	@docker run --rm -i -u "${USER_ID}:${GROUP_ID}" --mount type=bind,source=${PWD}/scripts/,target=/scripts/ -w /scripts koalaman/shellcheck:${SHELLCHECK_VERSION} ${SH_FILES}
+
+################################################################################
 # Utility-Command help
 ################################################################################
 .DEFAULT_GOAL := help
