@@ -7,28 +7,25 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sunakan/op-keychain/internal/cli"
+
 	"github.com/alecthomas/kong"
 )
 
 const version = "0.0.0"
 
 type CLI struct {
-	Version VersionCmd `cmd:"" help:"Print version"`
-}
-
-type VersionCmd struct{}
-
-func (c *VersionCmd) Run() error {
-	fmt.Println(version)
-	return nil
+	Version cli.VersionCmd `cmd:"" help:"Print version"`
 }
 
 func main() {
 	if len(os.Args) == 1 {
 		os.Args = append(os.Args, "--help")
 	}
-	var cli CLI
-	ctx := kong.Parse(&cli,
+	c := CLI{
+		Version: cli.VersionCmd{Version: version},
+	}
+	ctx := kong.Parse(&c,
 		kong.Name("op-keychain"),
 		kong.Description("Cache op:// secrets in macOS Keychain"),
 		kong.Exit(func(code int) {
