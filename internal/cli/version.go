@@ -3,7 +3,12 @@
 // Package cli implements the CLI subcommand layer
 package cli
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+
+	"github.com/sunakan/op-keychain/internal/tracing"
+)
 
 // VersionCmd implements the version subcommand
 type VersionCmd struct {
@@ -11,7 +16,9 @@ type VersionCmd struct {
 }
 
 // Run prints the version string to stdout
-func (c *VersionCmd) Run() error {
+func (c *VersionCmd) Run(ctx context.Context) error {
+	_, span := tracing.Tracer().Start(ctx, "version")
+	defer span.End()
 	fmt.Println(c.Version)
 	return nil
 }

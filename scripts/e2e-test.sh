@@ -106,6 +106,13 @@ run_cmd() {
   STDERR=$(cat "$STDERR_TMP")
 }
 
+run_cmd_tracing() {
+  OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER=stdout OTEL_RESOURCE_ATTRIBUTES= ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+  STATUS=$?
+  STDOUT=$(cat "$STDOUT_TMP")
+  STDERR=$(cat "$STDERR_TMP")
+}
+
 #
 # Build
 #
@@ -158,6 +165,15 @@ expect_exit_code 0 'version'
 expect_stdout_matches '^[0-9]+\.[0-9]+\.[0-9]+$' 'version stdout matches x.y.z'
 expect_stderr_empty 'version'
 
+echo ''
+echo '=== version With tracing ==='
+run_cmd_tracing version
+expect_exit_code 0 'version with tracing'
+expect_stdout_matches '^[0-9]+\.[0-9]+\.[0-9]+$' 'version stdout matches x.y.z with tracing'
+expect_stderr_contains '"Name":"version"' 'version span emitted'
+expect_stderr_contains '"Name":"main"' 'main span emitted'
+expect_stderr_contains '"Code":"Unset"' 'version spans have no error status'
+
 #
 # version --help
 #
@@ -177,6 +193,14 @@ run_cmd unknown
 expect_exit_code 2 'unknown sub command'
 expect_stdout_empty 'unknown sub command'
 expect_stderr_contains 'error:' 'unknown sub command'
+
+echo ''
+echo '=== Unknown sub command with tracing ==='
+run_cmd_tracing unknown
+expect_exit_code 2 'unknown sub command with tracing'
+expect_stdout_empty 'unknown sub command with tracing'
+expect_stderr_contains '"Name":"main"' 'main span emitted'
+expect_stderr_contains '"Code":"Error"' 'unknown sub command span has error status'
 
 #
 # No subcommand
