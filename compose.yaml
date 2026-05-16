@@ -1,0 +1,29 @@
+---
+
+#
+# json-file driver accumulates logs without limit by default.
+# Rotate at 30 MB and keep up to 5 generations to prevent disk exhaustion.
+#
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "30m"
+    max-file: "5"
+
+services:
+  # jaegertracing/jaeger
+  # https://hub.docker.com/r/jaegertracing/jaeger
+  jaeger:
+    logging:
+      <<: *default-logging
+    image: jaegertracing/jaeger:2.18.0
+    ports:
+      - "16686:16686"
+      - "16687:16687"
+      - "4318:4318"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:16686/"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 10s

@@ -9,6 +9,18 @@ build: ## バイナリビルド
 clean: ## バイナリ削除
 	@rm -rf op-keychain
 
+.PHONY: up
+up: ## docker compose up -d
+	@docker compose up -d
+
+.PHONY: down
+down: ## docker compose down
+	@docker compose down
+
+.PHONY: open
+open: ## Open Jaeger UI in browser
+	@open http://localhost:16686
+
 .PHONY: e2e-test
 e2e-test: ## e2e-test
 	@./scripts/e2e-test.sh
