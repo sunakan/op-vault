@@ -111,7 +111,23 @@ run_cmd() {
 }
 
 run_cmd_otlp() {
-  OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER=otlp OP_KEYCHAIN_OTLP_ENDPOINT="$JAEGER_OTLP" OTEL_RESOURCE_ATTRIBUTES= ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+  OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER=otlp OP_KEYCHAIN_OTLP_ENDPOINT="$JAEGER_OTLP" OTEL_RESOURCE_ATTRIBUTES='' ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+  STATUS=$?
+  STDOUT=$(cat "$STDOUT_TMP")
+  STDERR=$(cat "$STDERR_TMP")
+}
+
+run_cmd_stdin() {
+  local input="$1"; shift
+  printf '%s' "$input" | OP_KEYCHAIN_NAME="$TEST_CHAIN" ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+  STATUS=$?
+  STDOUT=$(cat "$STDOUT_TMP")
+  STDERR=$(cat "$STDERR_TMP")
+}
+
+run_cmd_stdin_otlp() {
+  local input="$1"; shift
+  printf '%s' "$input" | OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER=otlp OP_KEYCHAIN_OTLP_ENDPOINT="$JAEGER_OTLP" OTEL_RESOURCE_ATTRIBUTES='' ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
   STDERR=$(cat "$STDERR_TMP")
@@ -120,7 +136,7 @@ run_cmd_otlp() {
 run_cmd_with_exporter() {
   local exporter="$1"
   shift
-  OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER="$exporter" OP_KEYCHAIN_OTLP_ENDPOINT= OTEL_RESOURCE_ATTRIBUTES= ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+  OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER="$exporter" OP_KEYCHAIN_OTLP_ENDPOINT='' OTEL_RESOURCE_ATTRIBUTES='' ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
   STDERR=$(cat "$STDERR_TMP")
@@ -147,6 +163,14 @@ expect_span_name() {
     _pass "span operationName == '$expected'  $desc"
   else
     _fail "span operationName != '$expected'  $desc  (actual: $(printf '%s' "$actual" | tr '\n' ' '))"
+  fi
+}
+
+expect_file_exists() {
+  if [ -f "$1" ]; then
+    _pass "file exists '$1'  $2"
+  else
+    _fail "file not found '$1'  $2"
   fi
 }
 
@@ -218,7 +242,7 @@ expect_stdout_contains 'op-keychain' '--help output is in stdout'
 expect_stderr_empty '--help'
 
 for sub in version init; do
-  if printf '%s' "$STDOUT$STDERR" | grep -q "$sub"; then
+  if printf '%s' "$STDOUT$STDERR" | grep -qF "$sub"; then
     _pass "--help contains '$sub'"
   else
     _fail "--help does not contain '$sub'"
@@ -318,6 +342,66 @@ run_cmd
 expect_exit_code 0 'no subcommand'
 expect_stdout_contains 'op-keychain' 'no subcommand shows help'
 expect_stderr_empty 'no subcommand'
+
+#
+# init --help
+#
+echo ''
+echo '=== init --help ==='
+run_cmd init --help
+expect_exit_code 0 'init --help'
+expect_stdout_contains 'init' 'init --help output is in stdout'
+expect_stderr_empty 'init --help'
+
+#
+# init
+#
+echo ''
+echo '=== init ==='
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin 'testpass' init
+expect_exit_code 0 'init'
+expect_stdout_empty 'init'
+expect_stderr_empty 'init'
+expect_file_exists "$KEYCHAIN_PATH" 'init creates keychain file'
+
+#
+# init (already exists)
+#
+echo ''
+echo '=== init (already exists) ==='
+run_cmd_stdin 'testpass' init
+expect_exit_code 0 'init already exists'
+expect_stdout_empty 'init already exists'
+expect_stderr_contains "already exists: $TEST_CHAIN" 'init already exists'
+
+#
+# init (empty password)
+#
+echo ''
+echo '=== init (empty password) ==='
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin '' init
+expect_exit_code 0 'init empty password'
+expect_stdout_empty 'init empty password'
+expect_stderr_empty 'init empty password'
+expect_file_exists "$KEYCHAIN_PATH" 'init empty password creates keychain file'
+
+#
+# init with OTLP
+#
+echo ''
+echo '=== init with OTLP ==='
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+START_US=$(( $(date +%s) * 1000000 ))
+run_cmd_stdin_otlp 'testpass' init
+expect_exit_code 0 'init with OTLP'
+expect_stdout_empty 'init with OTLP'
+expect_stderr_empty 'init with OTLP'
+sleep 1
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
+expect_span_name 'init' 'init span received by Jaeger'
+expect_span_name 'main' 'main span received by Jaeger'
 
 #
 # Summary
