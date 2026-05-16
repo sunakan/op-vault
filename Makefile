@@ -13,9 +13,15 @@ clean: ## バイナリ削除
 e2e-test: ## e2e-test
 	@./scripts/e2e-test.sh
 
+.PHONY: fmt
+fmt: ## go fmt
+	@go fmt ./...
+	@$(MAKE) sh.fmt
+
 .PHONY: lint
 lint: ## lint
 	@golangci-lint run
+	@$(MAKE) sh.lint
 
 ################################################################################
 # Tool
