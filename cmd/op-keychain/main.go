@@ -19,6 +19,7 @@ const version = "0.0.0"
 
 type CLI struct {
 	Version cli.VersionCmd `cmd:"" help:"Print version"`
+	Init    cli.InitCmd    `cmd:"" help:"Initialize the keychain"`
 }
 
 func main() {

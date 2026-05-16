@@ -217,7 +217,7 @@ expect_exit_code 0 '--help'
 expect_stdout_contains 'op-keychain' '--help output is in stdout'
 expect_stderr_empty '--help'
 
-for sub in version; do
+for sub in version init; do
   if printf '%s' "$STDOUT$STDERR" | grep -q "$sub"; then
     _pass "--help contains '$sub'"
   else
