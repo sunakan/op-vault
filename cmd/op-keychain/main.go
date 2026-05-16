@@ -4,7 +4,7 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/sunakan/op-keychain/internal/cli"
@@ -36,7 +36,7 @@ func main() {
 		}),
 	)
 	if err := ctx.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		slog.Error("command failed", "err", err)
 		os.Exit(1)
 	}
 }
