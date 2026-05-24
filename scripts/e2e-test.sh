@@ -174,6 +174,14 @@ expect_file_exists() {
   fi
 }
 
+expect_file_not_exists() {
+  if [ ! -f "$1" ]; then
+    _pass "file not found '$1'  $2"
+  else
+    _fail "file still exists '$1'  $2"
+  fi
+}
+
 expect_span_status_error() {
   local desc="$1"
   local actual
@@ -241,7 +249,7 @@ expect_exit_code 0 '--help'
 expect_stdout_contains 'op-keychain' '--help output is in stdout'
 expect_stderr_empty '--help'
 
-for sub in version init; do
+for sub in version init reset; do
   if printf '%s' "$STDOUT$STDERR" | grep -qF "$sub"; then
     _pass "--help contains '$sub'"
   else
@@ -401,6 +409,72 @@ expect_stderr_empty 'init with OTLP'
 sleep 1
 TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
 expect_span_name 'init' 'init span received by Jaeger'
+expect_span_name 'main' 'main span received by Jaeger'
+
+#
+# reset --help
+#
+echo ''
+echo '=== reset --help ==='
+# Given: nothing
+# When
+run_cmd reset --help
+# Then
+expect_exit_code 0 'reset --help'
+expect_stdout_contains 'reset' 'reset --help output is in stdout'
+expect_stderr_empty 'reset --help'
+
+#
+# reset
+#
+echo ''
+echo '=== reset ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin '' init
+expect_exit_code 0 'reset: precondition init'
+# When
+run_cmd reset
+# Then
+expect_exit_code 0 'reset'
+expect_stdout_empty 'reset'
+expect_stderr_contains "deleted: $TEST_CHAIN" 'reset deletes keychain'
+expect_file_not_exists "$KEYCHAIN_PATH" 'reset removes keychain file'
+
+#
+# reset (not found)
+#
+echo ''
+echo '=== reset (not found) ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+# When
+run_cmd reset
+# Then
+expect_exit_code 0 'reset not found'
+expect_stdout_empty 'reset not found'
+expect_stderr_contains "not found: $TEST_CHAIN" 'reset not found message'
+
+#
+# reset with OTLP
+#
+echo ''
+echo '=== reset with OTLP ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin '' init
+expect_exit_code 0 'reset: precondition init'
+# When
+START_US=$(( $(date +%s) * 1000000 ))
+run_cmd_otlp reset
+# Then
+expect_exit_code 0 'reset with OTLP'
+expect_stdout_empty 'reset with OTLP'
+expect_stderr_contains "deleted: $TEST_CHAIN" 'reset with OTLP deletes keychain'
+expect_file_not_exists "$KEYCHAIN_PATH" 'reset removes keychain file'
+sleep 1
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
+expect_span_name 'reset' 'reset span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
 #
