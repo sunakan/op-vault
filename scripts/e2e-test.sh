@@ -150,6 +150,14 @@ run_cmd_stdin_otlp() {
   STDERR=$(cat "$STDERR_TMP")
 }
 
+run_cmd_no_account() {
+  perl -e "alarm ${CMD_TIMEOUT_SEC}; exec @ARGV" \
+    env -u OP_ACCOUNT OP_KEYCHAIN_NAME="$TEST_CHAIN" ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+  STATUS=$?
+  STDOUT=$(cat "$STDOUT_TMP")
+  STDERR=$(cat "$STDERR_TMP")
+}
+
 run_cmd_with_exporter() {
   local exporter="$1"
   shift
@@ -507,6 +515,19 @@ run_cmd read --help
 expect_exit_code 0 'read --help'
 expect_stdout_contains 'read' 'read --help output is in stdout'
 expect_stderr_empty 'read --help'
+
+#
+# read (no account)
+#
+echo ''
+echo '=== read (no account) ==='
+# Given: OP_ACCOUNT is unset and no -a flag is given
+# When
+run_cmd_no_account read "op://Private/MyItem/password"
+# Then
+expect_exit_code 1 'read (no account)'
+expect_stdout_empty 'read (no account)'
+expect_stderr_contains 'account is required' 'read (no account)'
 
 #
 # read (cache hit)
