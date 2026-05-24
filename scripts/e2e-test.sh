@@ -24,6 +24,7 @@ STDERR=''
 TRACES=''
 STDOUT_TMP=$(mktemp)
 STDERR_TMP=$(mktemp)
+CMD_TIMEOUT_SEC=10
 
 #
 # Helper
@@ -104,14 +105,16 @@ expect_stdout_matches() {
 }
 
 run_cmd() {
-  OP_KEYCHAIN_NAME="$TEST_CHAIN" ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+  perl -e "alarm ${CMD_TIMEOUT_SEC}; exec @ARGV" \
+    env OP_KEYCHAIN_NAME="$TEST_CHAIN" ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
   STDERR=$(cat "$STDERR_TMP")
 }
 
 run_cmd_otlp() {
-  OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER=otlp OP_KEYCHAIN_OTLP_ENDPOINT="$JAEGER_OTLP" OTEL_RESOURCE_ATTRIBUTES='' ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+  perl -e "alarm ${CMD_TIMEOUT_SEC}; exec @ARGV" \
+    env OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER=otlp OP_KEYCHAIN_OTLP_ENDPOINT="$JAEGER_OTLP" OTEL_RESOURCE_ATTRIBUTES='' ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
   STDERR=$(cat "$STDERR_TMP")
@@ -120,7 +123,8 @@ run_cmd_otlp() {
 run_cmd_stdin() {
   local input="$1"
   shift
-  printf '%s' "$input" | OP_KEYCHAIN_NAME="$TEST_CHAIN" ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+  printf '%s' "$input" | perl -e "alarm ${CMD_TIMEOUT_SEC}; exec @ARGV" \
+    env OP_KEYCHAIN_NAME="$TEST_CHAIN" ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
   STDERR=$(cat "$STDERR_TMP")
@@ -129,7 +133,8 @@ run_cmd_stdin() {
 run_cmd_stdin_otlp() {
   local input="$1"
   shift
-  printf '%s' "$input" | OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER=otlp OP_KEYCHAIN_OTLP_ENDPOINT="$JAEGER_OTLP" OTEL_RESOURCE_ATTRIBUTES='' ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+  printf '%s' "$input" | perl -e "alarm ${CMD_TIMEOUT_SEC}; exec @ARGV" \
+    env OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER=otlp OP_KEYCHAIN_OTLP_ENDPOINT="$JAEGER_OTLP" OTEL_RESOURCE_ATTRIBUTES='' ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
   STDERR=$(cat "$STDERR_TMP")
@@ -138,7 +143,8 @@ run_cmd_stdin_otlp() {
 run_cmd_with_exporter() {
   local exporter="$1"
   shift
-  OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER="$exporter" OP_KEYCHAIN_OTLP_ENDPOINT='' OTEL_RESOURCE_ATTRIBUTES='' ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+  perl -e "alarm ${CMD_TIMEOUT_SEC}; exec @ARGV" \
+    env OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER="$exporter" OP_KEYCHAIN_OTLP_ENDPOINT='' OTEL_RESOURCE_ATTRIBUTES='' ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
   STDERR=$(cat "$STDERR_TMP")
