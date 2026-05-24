@@ -35,7 +35,7 @@ CMD_TIMEOUT_SEC=10
 cleanup() {
   security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
   rm -f "$STDOUT_TMP" "$STDERR_TMP"
-  make down 2>/dev/null || true
+  make down 2>/dev/null &
 }
 trap cleanup EXIT
 
