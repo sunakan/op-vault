@@ -227,6 +227,8 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
+export OP_ACCOUNT="${OP_ACCOUNT:-dummy}"
+
 #
 # Jaeger
 #
@@ -541,7 +543,7 @@ expect_exit_code 0 'read cache hit: precondition init'
 ENTRY='{"ref":"op://Test/CachedItem/password","item_name":"CachedItem","value":"___cached-secret___"}'
 security add-generic-password \
   -s "op://Test/CachedItem/password" \
-  -a "1Password Item" \
+  -a "$OP_ACCOUNT" \
   -D "1Password Cache" \
   -w "$ENTRY" \
   "$KEYCHAIN_PATH"
@@ -621,7 +623,7 @@ expect_exit_code 0 'read with OTLP: precondition init'
 ENTRY='{"ref":"op://Test/MyItem/password","item_name":"MyItem","value":"supersecret"}'
 security add-generic-password \
   -s "op://Test/MyItem/password" \
-  -a "1Password Item" \
+  -a "$OP_ACCOUNT" \
   -D "1Password Cache" \
   -w "$ENTRY" \
   "$KEYCHAIN_PATH"
