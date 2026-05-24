@@ -227,7 +227,11 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-export OP_ACCOUNT="${OP_ACCOUNT:-dummy}"
+if [ -n "${OP_TEST_INTEGRATION:-}" ]; then
+  : "${OP_ACCOUNT:?OP_ACCOUNT is required when OP_TEST_INTEGRATION=1}"
+else
+  export OP_ACCOUNT="${OP_ACCOUNT:-dummy}"
+fi
 
 #
 # Jaeger
