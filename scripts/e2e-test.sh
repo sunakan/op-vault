@@ -532,6 +532,18 @@ expect_stdout_empty 'read (no account)'
 expect_stderr_contains 'account is required' 'read (no account)'
 
 #
+# read (invalid ref: wrong format)
+#
+echo ''
+echo '=== read (invalid ref: wrong format) ==='
+# When
+run_cmd read "op://hoge/fuga"
+# Then
+expect_exit_code 1 'read (invalid ref: wrong format)'
+expect_stdout_empty 'read (invalid ref: wrong format)'
+expect_stderr_contains 'invalid ref format' 'read (invalid ref: wrong format)'
+
+#
 # read (cache hit)
 #
 echo ''
