@@ -49,11 +49,20 @@ func ReadPassword() (string, error) {
 	return strings.TrimRight(string(b), "\r\n"), err
 }
 
-// Create creates a new keychain at path with the given password.
+// Create creates a new keychain at the given path with the given password.
 func Create(ctx context.Context, path, password string) error {
 	out, err := exec.CommandContext(ctx, "security", "create-keychain", "-p", password, path).CombinedOutput() //nolint:gosec // path and password are user-controlled inputs, not attacker-controlled
 	if err != nil {
 		return fmt.Errorf("security create-keychain: %w: %s", err, out)
+	}
+	return nil
+}
+
+// Remove removes a keychain at the given path.
+func Remove(ctx context.Context, path string) error {
+	out, err := exec.CommandContext(ctx, "security", "delete-keychain", path).CombinedOutput() //nolint:gosec // path is a user-controlled input, not attacker-controlled
+	if err != nil {
+		return fmt.Errorf("security delete-keychain: %w: %s", err, out)
 	}
 	return nil
 }
