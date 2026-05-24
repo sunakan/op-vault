@@ -13,6 +13,8 @@ import (
 	"strings"
 
 	"golang.org/x/term"
+
+	"github.com/sunakan/op-keychain/internal/tracing"
 )
 
 // DefaultName is the keychain name used when OP_KEYCHAIN_NAME is not set.
@@ -36,9 +38,11 @@ func FilePath() (string, error) {
 }
 
 // ReadPassword reads a password from stdin.
-// If stdin is a TTY, it prompts on stderr with no echo.
-// Otherwise, it reads from stdin directly.
-func ReadPassword() (string, error) {
+// If stdin is a TTY, it prompts on stderr with no echo; the OTel span duration includes user input time.
+// Otherwise, it reads from stdin directly (e.g. echo 'password' | op-keychain init).
+func ReadPassword(ctx context.Context) (string, error) {
+	_, span := tracing.Tracer().Start(ctx, "ReadPassword")
+	defer span.End()
 	if term.IsTerminal(int(os.Stdin.Fd())) {
 		fmt.Fprint(os.Stderr, "Keychain password: ")
 		b, err := term.ReadPassword(int(os.Stdin.Fd()))
@@ -51,8 +55,11 @@ func ReadPassword() (string, error) {
 
 // Create creates a new keychain at the given path with the given password.
 func Create(ctx context.Context, path, password string) error {
+	_, span := tracing.Tracer().Start(ctx, "Create")
+	defer span.End()
 	out, err := exec.CommandContext(ctx, "security", "create-keychain", "-p", password, path).CombinedOutput() //nolint:gosec // path and password are user-controlled inputs, not attacker-controlled
 	if err != nil {
+		tracing.SetSpanError(span, err)
 		return fmt.Errorf("security create-keychain: %w: %s", err, out)
 	}
 	return nil
@@ -60,8 +67,11 @@ func Create(ctx context.Context, path, password string) error {
 
 // Remove removes a keychain at the given path.
 func Remove(ctx context.Context, path string) error {
+	_, span := tracing.Tracer().Start(ctx, "Remove")
+	defer span.End()
 	out, err := exec.CommandContext(ctx, "security", "delete-keychain", path).CombinedOutput() //nolint:gosec // path is a user-controlled input, not attacker-controlled
 	if err != nil {
+		tracing.SetSpanError(span, err)
 		return fmt.Errorf("security delete-keychain: %w: %s", err, out)
 	}
 	return nil

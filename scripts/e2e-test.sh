@@ -118,7 +118,8 @@ run_cmd_otlp() {
 }
 
 run_cmd_stdin() {
-  local input="$1"; shift
+  local input="$1"
+  shift
   printf '%s' "$input" | OP_KEYCHAIN_NAME="$TEST_CHAIN" ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
@@ -126,7 +127,8 @@ run_cmd_stdin() {
 }
 
 run_cmd_stdin_otlp() {
-  local input="$1"; shift
+  local input="$1"
+  shift
   printf '%s' "$input" | OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER=otlp OP_KEYCHAIN_OTLP_ENDPOINT="$JAEGER_OTLP" OTEL_RESOURCE_ATTRIBUTES='' ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
@@ -145,7 +147,7 @@ run_cmd_with_exporter() {
 wait_for_jaeger() {
   local i=0
   # Poll directly instead of relying on Docker healthcheck (start_period adds unnecessary delay)
-  while ! curl -sf "${JAEGER_UI}/" > /dev/null 2>&1; do
+  while ! curl -sf "${JAEGER_UI}/" >/dev/null 2>&1; do
     i=$((i + 1))
     if [ "$i" -ge 30 ]; then
       printf '  ERROR  Jaeger did not start within 30s\n' >&2
@@ -196,7 +198,7 @@ expect_span_status_error() {
 #
 # Prerequisites
 #
-if ! command -v jq > /dev/null 2>&1; then
+if ! command -v jq >/dev/null 2>&1; then
   printf '  ERROR  jq is required but not installed\n' >&2
   exit 1
 fi
@@ -307,7 +309,7 @@ expect_stderr_empty 'version --help'
 #
 echo ''
 echo '=== version with OTLP ==='
-START_US=$(( $(date +%s) * 1000000 ))
+START_US=$(($(date +%s) * 1000000))
 run_cmd_otlp version
 expect_exit_code 0 'version with OTLP'
 expect_stdout_matches '^[0-9]+\.[0-9]+\.[0-9]+$' 'version stdout matches x.y.z with OTLP'
@@ -332,7 +334,7 @@ expect_stderr_contains 'error:' 'unknown sub command'
 #
 echo ''
 echo '=== Unknown sub command with OTLP ==='
-START_US=$(( $(date +%s) * 1000000 ))
+START_US=$(($(date +%s) * 1000000))
 run_cmd_otlp unknown
 expect_exit_code 2 'unknown sub command with OTLP'
 expect_stdout_empty 'unknown sub command with OTLP'
@@ -401,7 +403,7 @@ expect_file_exists "$KEYCHAIN_PATH" 'init empty password creates keychain file'
 echo ''
 echo '=== init with OTLP ==='
 security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
-START_US=$(( $(date +%s) * 1000000 ))
+START_US=$(($(date +%s) * 1000000))
 run_cmd_stdin_otlp 'testpass' init
 expect_exit_code 0 'init with OTLP'
 expect_stdout_empty 'init with OTLP'
@@ -465,7 +467,7 @@ security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
 run_cmd_stdin '' init
 expect_exit_code 0 'reset: precondition init'
 # When
-START_US=$(( $(date +%s) * 1000000 ))
+START_US=$(($(date +%s) * 1000000))
 run_cmd_otlp reset
 # Then
 expect_exit_code 0 'reset with OTLP'

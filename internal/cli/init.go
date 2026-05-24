@@ -31,7 +31,7 @@ func (c *InitCmd) Run(ctx context.Context) error {
 		return nil
 	}
 
-	password, err := keychain.ReadPassword()
+	password, err := keychain.ReadPassword(ctx)
 	if err != nil {
 		tracing.SetSpanError(span, err)
 		return err
