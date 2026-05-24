@@ -60,10 +60,9 @@ func ReadPassword(ctx context.Context) (string, error) {
 func Create(ctx context.Context, path, password string) error {
 	_, span := tracing.Tracer().Start(ctx, "Create")
 	defer span.End()
-	out, err := exec.CommandContext(ctx, "security", "create-keychain", "-p", password, path).CombinedOutput() //nolint:gosec // path and password are user-controlled inputs, not attacker-controlled
-	if err != nil {
+	if err := cgoCreate(path, password); err != nil {
 		tracing.SetSpanError(span, err)
-		return fmt.Errorf("security create-keychain: %w: %s", err, out)
+		return err
 	}
 	return nil
 }
@@ -86,7 +85,11 @@ func Get(ctx context.Context, account, ref string) (string, error) {
 		return "", e
 	}
 
-	out, err := exec.CommandContext(ctx, "security", "find-generic-password", "-s", ref, "-a", account, "-w", path).Output() //nolint:gosec // ref and account are user-controlled inputs, not attacker-controlled
+	// exec instead of CGO: `security find-generic-password -w` outputs the secret via stdout,
+	// not as a command-line arg, so there is no ps exposure.
+	// CGO SecItemCopyMatching prompts for permission when reading items created by other apps
+	// (e.g. `security add-generic-password` in E2E setup), so exec avoids the dialog entirely.
+	out, err := exec.CommandContext(ctx, "security", "find-generic-password", "-s", ref, "-a", account, "-w", path).Output() //nolint:gosec // ref, account, path are user-controlled, not attacker-controlled
 	if err != nil {
 		return "", &CacheMissError{Ref: ref}
 	}
@@ -121,16 +124,9 @@ func Set(ctx context.Context, account, ref, value string) error {
 		return fmt.Errorf("failed to marshal cache entry: %w", err)
 	}
 
-	out, err := exec.CommandContext(ctx, "security", "add-generic-password", //nolint:gosec // ref, account and path are user-controlled inputs, not attacker-controlled
-		"-s", ref,
-		"-a", account,
-		"-D", keychainKind,
-		"-w", string(data),
-		path,
-	).CombinedOutput()
-	if err != nil {
+	if err := cgoAdd(path, ref, account, keychainKind, data); err != nil {
 		tracing.SetSpanError(span, err)
-		return fmt.Errorf("security add-generic-password: %w: %s", err, out)
+		return err
 	}
 	return nil
 }
