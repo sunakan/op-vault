@@ -6,7 +6,7 @@ package main
 import (
 	"context"
 	"errors"
-	"log/slog"
+	"fmt"
 	"os"
 
 	"github.com/alecthomas/kong"
@@ -21,6 +21,7 @@ type CLI struct {
 	Version cli.VersionCmd `cmd:"" help:"Print version"`
 	Init    cli.InitCmd    `cmd:"" help:"Initialize the keychain"`
 	Reset   cli.ResetCmd   `cmd:"" help:"Remove the keychain"`
+	Read    cli.ReadCmd    `cmd:"" help:"Get a secret from cache or 1Password"`
 }
 
 func main() {
@@ -34,7 +35,7 @@ func run() int {
 	ctx := context.Background()
 	shutdown, err := tracing.Init(ctx, "op-keychain", version)
 	if err != nil {
-		slog.Error("failed to initialize tracer", "err", err)
+		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	defer func() { _ = shutdown(ctx) }()
@@ -63,7 +64,7 @@ func run() int {
 	)
 	if err := kongCtx.Run(); err != nil {
 		tracing.SetSpanError(span, err)
-		slog.Error("command failed", "err", err)
+		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	return 0
