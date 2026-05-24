@@ -18,6 +18,7 @@ JAEGER_UI='http://localhost:16686'
 JAEGER_OTLP='http://localhost:4318'
 PASS=0
 FAIL=0
+SKIP=0
 STATUS=0
 STDOUT=''
 STDERR=''
@@ -53,6 +54,15 @@ _fail() {
     printf '\033[31m  FAIL\033[0m  %s\n' "$1"
   else
     printf '  FAIL  %s\n' "$1"
+  fi
+}
+
+_skip() {
+  SKIP=$((SKIP + 1))
+  if [[ -t 2 ]]; then
+    printf '\033[33m  SKIP\033[0m  %s\n' "$1"
+  else
+    printf '  SKIP  %s\n' "$1"
   fi
 }
 
@@ -257,7 +267,7 @@ expect_exit_code 0 '--help'
 expect_stdout_contains 'op-keychain' '--help output is in stdout'
 expect_stderr_empty '--help'
 
-for sub in version init reset; do
+for sub in version init reset read; do
   if printf '%s' "$STDOUT$STDERR" | grep -qF "$sub"; then
     _pass "--help contains '$sub'"
   else
@@ -486,11 +496,132 @@ expect_span_name 'reset' 'reset span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
 #
+# read --help
+#
+echo ''
+echo '=== read --help ==='
+# Given: nothing
+# When
+run_cmd read --help
+# Then
+expect_exit_code 0 'read --help'
+expect_stdout_contains 'read' 'read --help output is in stdout'
+expect_stderr_empty 'read --help'
+
+#
+# read (cache hit)
+#
+echo ''
+echo '=== read (cache hit) ==='
+# Given
+run_cmd reset
+run_cmd_stdin '' init
+expect_exit_code 0 'read cache hit: precondition init'
+ENTRY='{"ref":"op://Test/CachedItem/password","item_name":"CachedItem","value":"___cached-secret___"}'
+security add-generic-password \
+  -s "op://Test/CachedItem/password" \
+  -a "1Password Item" \
+  -D "1Password Cache" \
+  -w "$ENTRY" \
+  "$KEYCHAIN_PATH"
+# When
+run_cmd read "op://Test/CachedItem/password"
+# Then
+expect_exit_code 0 'read (cache hit)'
+expect_stdout_contains '___cached-secret___' 'read (cache hit) stdout'
+expect_stderr_empty 'read (cache hit)'
+
+#
+# read (cache miss)
+#
+echo ''
+echo '=== read (cache miss) ==='
+if [ -z "${OP_TEST_INTEGRATION:-}" ]; then
+  _skip 'read (cache miss): requires 1Password (set OP_TEST_INTEGRATION=1 to run)'
+else
+  # Requires 1Password item: op://Test/ExistedItem/password = "___existed-secret___"
+  # Given
+  run_cmd reset
+  run_cmd_stdin '' init
+  expect_exit_code 0 'read cache miss: precondition init'
+  # When
+  run_cmd read "op://Test/ExistedItem/password"
+  # Then
+  expect_exit_code 0 'read (cache miss)'
+  expect_stdout_contains '___existed-secret___' 'read (cache miss) stdout'
+  expect_stderr_empty 'read (cache miss)'
+fi
+
+#
+# read (not found key in 1Password)
+#
+echo ''
+echo '=== read (not found key in 1Password) ==='
+if [ -z "${OP_TEST_INTEGRATION:-}" ]; then
+  _skip 'read (not found key in 1Password): requires 1Password (set OP_TEST_INTEGRATION=1 to run)'
+else
+  # Requires op://Test/NotFound/password to NOT exist in 1Password
+  # Given
+  run_cmd reset
+  run_cmd_stdin '' init
+  expect_exit_code 0 'read not found in 1Password: precondition init'
+  # When
+  run_cmd read "op://Test/NotFound/password"
+  # Then
+  expect_exit_code 1 'read (not found key in 1Password)'
+  expect_stdout_empty 'read (not found key in 1Password)'
+  expect_stderr_contains 'not found in 1Password: op://Test/NotFound/password' 'read (not found key in 1Password)'
+fi
+
+#
+# read (not found keychain)
+#
+echo ''
+echo '=== read (not found keychain) ==='
+# Given
+run_cmd reset
+expect_file_not_exists "$KEYCHAIN_PATH" 'read: precondition keychain not exist'
+# When
+run_cmd read "op://Private/MyItem/password"
+# Then
+expect_exit_code 1 'read (not found keychain)'
+expect_stdout_empty 'read (not found keychain)'
+expect_stderr_contains "keychain not found: run 'op-keychain init'" 'read (not found keychain)'
+
+#
+# read with OTLP
+#
+echo ''
+echo '=== read with OTLP ==='
+# Given
+run_cmd reset
+run_cmd_stdin '' init
+expect_exit_code 0 'read with OTLP: precondition init'
+ENTRY='{"ref":"op://Test/MyItem/password","item_name":"MyItem","value":"supersecret"}'
+security add-generic-password \
+  -s "op://Test/MyItem/password" \
+  -a "1Password Item" \
+  -D "1Password Cache" \
+  -w "$ENTRY" \
+  "$KEYCHAIN_PATH"
+# When
+START_US=$(($(date +%s) * 1000000))
+run_cmd_otlp read "op://Test/MyItem/password"
+# Then
+expect_exit_code 0 'read with OTLP'
+expect_stdout_contains 'supersecret' 'read with OTLP stdout'
+expect_stderr_empty 'read with OTLP'
+sleep 1
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
+expect_span_name 'read' 'read span received by Jaeger'
+expect_span_name 'main' 'main span received by Jaeger'
+
+#
 # Summary
 #
 echo ''
 echo '─────────────────────────────────────────────'
-printf " PASS: %d  FAIL: %d\n" "$PASS" "$FAIL"
+printf " PASS: %d  FAIL: %d  SKIP: %d\n" "$PASS" "$FAIL" "$SKIP"
 echo '─────────────────────────────────────────────'
 
 # Exit with non-zero if any test failed
