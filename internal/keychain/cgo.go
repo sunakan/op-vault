@@ -30,6 +30,56 @@ static OSStatus kcOpen(const char *path, SecKeychainRef *out) {
 	return SecKeychainOpen(path, out);
 }
 
+// kcGetStatus returns 1 if unlocked, 0 if locked, -1 on error.
+static int kcGetStatus(const char *path) {
+	SecKeychainRef ref = NULL;
+	if (SecKeychainOpen(path, &ref) != noErr || ref == NULL) {
+		return -1;
+	}
+	SecKeychainStatus status = 0;
+	OSStatus err = SecKeychainGetStatus(ref, &status);
+	CFRelease(ref);
+	if (err != noErr) {
+		return -1;
+	}
+	return (status & kSecUnlockStateStatus) ? 1 : 0;
+}
+
+// kcCountItems returns the number of "1Password Cache" generic password items
+// in the keychain at path, or -1 on error.
+static int kcCountItems(const char *path) {
+	SecKeychainRef ref = NULL;
+	if (SecKeychainOpen(path, &ref) != noErr || ref == NULL) {
+		return -1;
+	}
+	CFStringRef desc = CFStringCreateWithCString(NULL, "1Password Cache", kCFStringEncodingUTF8);
+	CFArrayRef searchList = CFArrayCreate(NULL, (const void **)&ref, 1, &kCFTypeArrayCallBacks);
+	const void *keys[] = {
+		kSecClass, kSecAttrDescription, kSecMatchSearchList, kSecMatchLimit, kSecReturnAttributes,
+	};
+	const void *vals[] = {
+		kSecClassGenericPassword, desc, searchList, kSecMatchLimitAll, kCFBooleanTrue,
+	};
+	CFDictionaryRef query = CFDictionaryCreate(NULL, keys, vals, 5,
+	    &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+	CFTypeRef result = NULL;
+	OSStatus err = SecItemCopyMatching(query, &result);
+	CFRelease(query);
+	CFRelease(searchList);
+	CFRelease(desc);
+	CFRelease(ref);
+	int count = 0;
+	if (err == noErr && result != NULL) {
+		count = (int)CFArrayGetCount((CFArrayRef)result);
+		CFRelease(result);
+	} else if (err == errSecItemNotFound) {
+		count = 0;
+	} else {
+		count = -1;
+	}
+	return count;
+}
+
 // kcAdd adds a generic password to the keychain referenced by kref.
 // SecItemAdd itself is not deprecated; only obtaining kref requires deprecated API.
 // kSecAttrAccess with NULL trusted list — any app can read without a permission dialog.
@@ -75,6 +125,30 @@ import (
 	"fmt"
 	"unsafe" //nolint:gocritic
 )
+
+func cgoGetStatus(path string) (unlocked bool, err error) {
+	p := C.CString(path)
+	defer C.free(unsafe.Pointer(p))
+	code := C.kcGetStatus(p)
+	switch code {
+	case 1:
+		return true, nil
+	case 0:
+		return false, nil
+	default:
+		return false, fmt.Errorf("SecKeychainGetStatus: failed for %s", path)
+	}
+}
+
+func cgoCountItems(path string) (int, error) {
+	p := C.CString(path)
+	defer C.free(unsafe.Pointer(p))
+	code := C.kcCountItems(p)
+	if code < 0 {
+		return 0, fmt.Errorf("SecItemCopyMatching: failed for %s", path)
+	}
+	return int(code), nil
+}
 
 func cgoCreate(path, password string) error {
 	p := C.CString(path)

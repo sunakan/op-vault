@@ -656,6 +656,114 @@ expect_span_name 'read' 'read span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
 #
+# status --help
+#
+echo ''
+echo '=== status --help ==='
+run_cmd status --help
+expect_exit_code 0 'status --help'
+expect_stdout_contains 'status' 'status --help output is in stdout'
+expect_stderr_empty 'status --help'
+
+#
+# status (not initialized)
+#
+echo ''
+echo '=== status (not initialized) ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+# When
+run_cmd status
+# Then
+expect_exit_code 0 'status (not initialized)'
+expect_stdout_contains 'status: not initialized' 'status not initialized'
+expect_stderr_empty 'status (not initialized)'
+
+#
+# status (locked)
+#
+echo ''
+echo '=== status (locked) ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin 'testpass' init
+expect_exit_code 0 'status locked: precondition init'
+security lock-keychain "$KEYCHAIN_PATH"
+# When
+run_cmd status
+# Then
+expect_exit_code 0 'status (locked)'
+expect_stdout_contains 'status: locked' 'status locked'
+expect_stdout_contains "path: $KEYCHAIN_PATH" 'status locked path'
+expect_stderr_empty 'status (locked)'
+
+#
+# status (unlocked, 0 entries)
+#
+echo ''
+echo '=== status (unlocked, 0 entries) ==='
+# Given: keychain exists and is freshly created (unlocked)
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin 'testpass' init
+expect_exit_code 0 'status unlocked 0: precondition init'
+# When
+run_cmd status
+# Then
+expect_exit_code 0 'status (unlocked, 0 entries)'
+expect_stdout_contains 'status: unlocked' 'status unlocked'
+expect_stdout_contains "path: $KEYCHAIN_PATH" 'status unlocked path'
+expect_stdout_contains 'cache: 0 entries' 'status 0 entries'
+expect_stderr_empty 'status (unlocked, 0 entries)'
+
+#
+# status (unlocked, 2 entries)
+#
+echo ''
+echo '=== status (unlocked, 2 entries) ==='
+# Given: add 2 cache entries to the keychain from previous test
+security unlock-keychain -p 'testpass' "$KEYCHAIN_PATH"
+security add-generic-password \
+  -s "op://Test/Item1/password" \
+  -a "$OP_ACCOUNT" \
+  -D "1Password Cache" \
+  -w '{"ref":"op://Test/Item1/password","item_name":"Item1","value":"v1"}' \
+  "$KEYCHAIN_PATH"
+security add-generic-password \
+  -s "op://Test/Item2/password" \
+  -a "$OP_ACCOUNT" \
+  -D "1Password Cache" \
+  -w '{"ref":"op://Test/Item2/password","item_name":"Item2","value":"v2"}' \
+  "$KEYCHAIN_PATH"
+# When
+run_cmd status
+# Then
+expect_exit_code 0 'status (unlocked, 2 entries)'
+expect_stdout_contains 'status: unlocked' 'status unlocked 2'
+expect_stdout_contains 'cache: 2 entries' 'status 2 entries'
+expect_stderr_empty 'status (unlocked, 2 entries)'
+
+#
+# status with OTLP
+#
+echo ''
+echo '=== status with OTLP ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin 'testpass' init
+expect_exit_code 0 'status with OTLP: precondition init'
+# When
+START_US=$(($(date +%s) * 1000000))
+run_cmd_otlp status
+# Then
+expect_exit_code 0 'status with OTLP'
+expect_stdout_contains 'status: unlocked' 'status with OTLP output'
+expect_stderr_empty 'status with OTLP'
+sleep 1
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
+expect_span_name 'status' 'status span received by Jaeger'
+expect_span_name 'main' 'main span received by Jaeger'
+
+#
 # Summary
 #
 echo ''
