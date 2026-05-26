@@ -5,7 +5,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/sunakan/op-keychain/internal/keychain"
 	"github.com/sunakan/op-keychain/internal/tracing"
@@ -26,13 +25,13 @@ func (c *StatusCmd) Run(ctx context.Context) error {
 	}
 
 	if !result.Initialized {
-		fmt.Fprintln(os.Stdout, "status: not initialized")
+		fmt.Println("status: not initialized")
 		return nil
 	}
 
 	if !result.Unlocked {
-		fmt.Fprintln(os.Stdout, "status: locked")
-		fmt.Fprintf(os.Stdout, "path: %s\n", result.Path)
+		fmt.Println("status: locked")
+		fmt.Printf("path: %s\n", result.Path)
 		return nil
 	}
 
@@ -40,8 +39,8 @@ func (c *StatusCmd) Run(ctx context.Context) error {
 	if result.EntryCount == 1 {
 		noun = "entry"
 	}
-	fmt.Fprintln(os.Stdout, "status: unlocked")
-	fmt.Fprintf(os.Stdout, "path: %s\n", result.Path)
-	fmt.Fprintf(os.Stdout, "cache: %d %s\n", result.EntryCount, noun)
+	fmt.Println("status: unlocked")
+	fmt.Printf("path: %s\n", result.Path)
+	fmt.Printf("cache: %d %s\n", result.EntryCount, noun)
 	return nil
 }
