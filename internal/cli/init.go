@@ -41,5 +41,6 @@ func (c *InitCmd) Run(ctx context.Context) error {
 		tracing.SetSpanError(span, err)
 		return err
 	}
+	fmt.Fprintf(os.Stderr, "Initialized %s\n", keychainPath)
 	return nil
 }

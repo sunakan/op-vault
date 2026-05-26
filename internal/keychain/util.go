@@ -1,5 +1,6 @@
 //go:build darwin
 
+// Package keychain provides helpers for macOS Keychain operations.
 package keychain
 
 import (

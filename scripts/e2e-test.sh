@@ -402,7 +402,7 @@ security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
 run_cmd_stdin 'testpass' init
 expect_exit_code 0 'init'
 expect_stdout_empty 'init'
-expect_stderr_empty 'init'
+expect_stderr_contains "Initialized $KEYCHAIN_PATH" 'init'
 expect_file_exists "$KEYCHAIN_PATH" 'init creates keychain file'
 
 #
@@ -424,7 +424,7 @@ security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
 run_cmd_stdin '' init
 expect_exit_code 0 'init empty password'
 expect_stdout_empty 'init empty password'
-expect_stderr_empty 'init empty password'
+expect_stderr_contains "Initialized $KEYCHAIN_PATH" 'init empty password'
 expect_file_exists "$KEYCHAIN_PATH" 'init empty password creates keychain file'
 
 #
@@ -437,7 +437,7 @@ START_US=$(($(date +%s) * 1000000))
 run_cmd_stdin_otlp 'testpass' init
 expect_exit_code 0 'init with OTLP'
 expect_stdout_empty 'init with OTLP'
-expect_stderr_empty 'init with OTLP'
+expect_stderr_contains "Initialized $KEYCHAIN_PATH" 'init with OTLP'
 sleep 1
 TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
 expect_span_name 'init' 'init span received by Jaeger'
