@@ -21,6 +21,7 @@ type CLI struct {
 	Version cli.VersionCmd `cmd:"" help:"Print version"`
 	Init    cli.InitCmd    `cmd:"" help:"Initialize the keychain"`
 	Status  cli.StatusCmd  `cmd:"" help:"Show keychain status and cache entry count"`
+	Set     cli.SetCmd     `cmd:"" help:"Cache a secret in the keychain"`
 	Reset   cli.ResetCmd   `cmd:"" help:"Remove the keychain"`
 	Read    cli.ReadCmd    `cmd:"" help:"Get a secret from cache or 1Password"`
 }

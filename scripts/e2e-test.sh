@@ -510,6 +510,112 @@ expect_span_name 'reset' 'reset span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
 #
+# set --help
+#
+echo ''
+echo '=== set --help ==='
+run_cmd set --help
+expect_exit_code 0 'set --help'
+expect_stdout_contains 'set' 'set --help output is in stdout'
+expect_stderr_empty 'set --help'
+
+#
+# set (keychain not found)
+#
+echo ''
+echo '=== set (keychain not found) ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+# When
+run_cmd set "op://Test/Item/password" "secret"
+# Then
+expect_exit_code 1 'set (keychain not found)'
+expect_stdout_empty 'set (keychain not found)'
+expect_stderr_contains "keychain not found: run 'op-keychain init'" 'set (keychain not found)'
+
+#
+# set (no account)
+#
+echo ''
+echo '=== set (no account) ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin '' init
+expect_exit_code 0 'set no account: precondition init'
+# When
+run_cmd_no_account set "op://Test/Item/password" "secret"
+# Then
+expect_exit_code 1 'set (no account)'
+expect_stdout_empty 'set (no account)'
+expect_stderr_contains 'account is required' 'set (no account)'
+
+#
+# set (invalid ref)
+#
+echo ''
+echo '=== set (invalid ref: wrong format) ==='
+# When
+run_cmd set "op://hoge/fuga" "secret"
+# Then
+expect_exit_code 1 'set (invalid ref: wrong format)'
+expect_stdout_empty 'set (invalid ref: wrong format)'
+expect_stderr_contains 'invalid ref format' 'set (invalid ref: wrong format)'
+
+#
+# set
+#
+echo ''
+echo '=== set ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin '' init
+expect_exit_code 0 'set: precondition init'
+# When
+run_cmd set "op://Test/Item/password" "___cached-secret___"
+# Then
+expect_exit_code 0 'set'
+expect_stdout_empty 'set'
+expect_stderr_contains 'cached: op://Test/Item/password' 'set cached message'
+
+#
+# set (overwrite)
+#
+echo ''
+echo '=== set (overwrite) ==='
+# Given: same ref already cached from previous test
+# When: overwrite with a different value
+run_cmd set "op://Test/Item/password" "___new-secret___"
+# Then
+expect_exit_code 0 'set overwrite'
+expect_stdout_empty 'set overwrite'
+expect_stderr_contains 'cached: op://Test/Item/password' 'set overwrite cached message'
+# verify the new value is readable
+run_cmd read "op://Test/Item/password"
+expect_exit_code 0 'set overwrite: verify read'
+expect_stdout_contains '___new-secret___' 'set overwrite: value updated'
+
+#
+# set with OTLP
+#
+echo ''
+echo '=== set with OTLP ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin '' init
+expect_exit_code 0 'set with OTLP: precondition init'
+# When
+START_US=$(($(date +%s) * 1000000))
+run_cmd_otlp set "op://Test/SetItem/password" "set-secret"
+# Then
+expect_exit_code 0 'set with OTLP'
+expect_stdout_empty 'set with OTLP'
+expect_stderr_contains 'cached: op://Test/SetItem/password' 'set with OTLP output'
+sleep 1
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
+expect_span_name 'set' 'set span received by Jaeger'
+expect_span_name 'main' 'main span received by Jaeger'
+
+#
 # read --help
 #
 echo ''
@@ -556,13 +662,8 @@ echo '=== read (cache hit) ==='
 run_cmd reset
 run_cmd_stdin '' init
 expect_exit_code 0 'read cache hit: precondition init'
-ENTRY='{"ref":"op://Test/CachedItem/password","item_name":"CachedItem","value":"___cached-secret___"}'
-security add-generic-password \
-  -s "op://Test/CachedItem/password" \
-  -a "$OP_ACCOUNT" \
-  -D "1Password Cache" \
-  -w "$ENTRY" \
-  "$KEYCHAIN_PATH"
+run_cmd set "op://Test/CachedItem/password" "___cached-secret___"
+expect_exit_code 0 'read cache hit: precondition set'
 # When
 run_cmd read "op://Test/CachedItem/password"
 # Then
@@ -636,13 +737,8 @@ echo '=== read with OTLP ==='
 run_cmd reset
 run_cmd_stdin '' init
 expect_exit_code 0 'read with OTLP: precondition init'
-ENTRY='{"ref":"op://Test/MyItem/password","item_name":"MyItem","value":"supersecret"}'
-security add-generic-password \
-  -s "op://Test/MyItem/password" \
-  -a "$OP_ACCOUNT" \
-  -D "1Password Cache" \
-  -w "$ENTRY" \
-  "$KEYCHAIN_PATH"
+run_cmd set "op://Test/MyItem/password" "supersecret"
+expect_exit_code 0 'read with OTLP: precondition set'
 # When
 START_US=$(($(date +%s) * 1000000))
 run_cmd_otlp read "op://Test/MyItem/password"
@@ -721,19 +817,10 @@ expect_stderr_empty 'status (unlocked, 0 entries)'
 echo ''
 echo '=== status (unlocked, 2 entries) ==='
 # Given: add 2 cache entries to the keychain from previous test
-security unlock-keychain -p 'testpass' "$KEYCHAIN_PATH"
-security add-generic-password \
-  -s "op://Test/Item1/password" \
-  -a "$OP_ACCOUNT" \
-  -D "1Password Cache" \
-  -w '{"ref":"op://Test/Item1/password","item_name":"Item1","value":"v1"}' \
-  "$KEYCHAIN_PATH"
-security add-generic-password \
-  -s "op://Test/Item2/password" \
-  -a "$OP_ACCOUNT" \
-  -D "1Password Cache" \
-  -w '{"ref":"op://Test/Item2/password","item_name":"Item2","value":"v2"}' \
-  "$KEYCHAIN_PATH"
+run_cmd set "op://Test/Item1/password" "v1"
+expect_exit_code 0 'status 2 entries: precondition set item1'
+run_cmd set "op://Test/Item2/password" "v2"
+expect_exit_code 0 'status 2 entries: precondition set item2'
 # When
 run_cmd status
 # Then

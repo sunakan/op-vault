@@ -67,6 +67,12 @@ func Set(ctx context.Context, account, ref, value string) error {
 		return err
 	}
 
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		e := &NotFoundError{Path: path}
+		tracing.SetSpanError(span, e)
+		return e
+	}
+
 	entry := Entry{
 		Ref:      ref,
 		ItemName: itemNameFromRef(ref),

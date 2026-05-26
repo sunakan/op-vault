@@ -125,11 +125,12 @@ static int kcGet(const char *path, const char *service, const char *account,
 	return 0;
 }
 
-// kcAdd adds a generic password to the keychain referenced by kref.
-// SecItemAdd itself is not deprecated; only obtaining kref requires deprecated API.
-// kSecAttrAccess with NULL trusted list — any app can read without a permission dialog.
-// Without this, macOS binds the ACL to the creating app's code signature and prompts
-// every other caller (including `security` CLI used in E2E and re-built binaries).
+// kcAdd adds or updates a generic password in the keychain referenced by kref.
+// On errSecDuplicateItem, falls back to SecItemUpdate to overwrite the value.
+// kSecAttrAccess restricts reads to the current binary only — prevents other processes
+// from silently reading cached 1Password secrets.
+// NULL trusted list (any app can read) was the previous approach; replaced to limit
+// silent access to cached secrets.
 static OSStatus kcAdd(SecKeychainRef kref,
                       const char *service, const char *account,
                       const char *description,
@@ -139,8 +140,13 @@ static OSStatus kcAdd(SecKeychainRef kref,
 	CFStringRef desc = CFStringCreateWithCString(NULL, description, kCFStringEncodingUTF8);
 	CFDataRef   dat  = CFDataCreate(NULL, (const UInt8 *)data, (CFIndex)dataLen);
 
+	SecTrustedApplicationRef selfApp = NULL;
+	SecTrustedApplicationCreateFromPath(NULL, &selfApp);
+	CFArrayRef trustedList = CFArrayCreate(NULL, (const void **)&selfApp, 1, &kCFTypeArrayCallBacks);
 	SecAccessRef access = NULL;
-	SecAccessCreate(svc, NULL, &access);
+	SecAccessCreate(svc, trustedList, &access);
+	CFRelease(trustedList);
+	if (selfApp) CFRelease(selfApp);
 
 	const void *keys[] = {
 		kSecClass, kSecAttrService, kSecAttrAccount,
@@ -153,6 +159,22 @@ static OSStatus kcAdd(SecKeychainRef kref,
 	    &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
 
 	OSStatus err = SecItemAdd(attrs, NULL);
+
+	if (err == errSecDuplicateItem) {
+		CFArrayRef searchList = CFArrayCreate(NULL, (const void **)&kref, 1, &kCFTypeArrayCallBacks);
+		const void *qkeys[] = { kSecClass, kSecAttrService, kSecAttrAccount, kSecMatchSearchList };
+		const void *qvals[] = { kSecClassGenericPassword, svc, acc, searchList };
+		CFDictionaryRef query = CFDictionaryCreate(NULL, qkeys, qvals, 4,
+		    &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+		const void *ukeys[] = { kSecValueData };
+		const void *uvals[] = { dat };
+		CFDictionaryRef upd = CFDictionaryCreate(NULL, ukeys, uvals, 1,
+		    &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+		err = SecItemUpdate(query, upd);
+		CFRelease(upd);
+		CFRelease(query);
+		CFRelease(searchList);
+	}
 
 	CFRelease(attrs);
 	if (access) CFRelease(access);
