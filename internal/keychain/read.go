@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/sunakan/op-keychain/internal/tracing"
@@ -40,17 +39,17 @@ func Get(ctx context.Context, account, ref string) (string, error) {
 		return "", e
 	}
 
-	// exec instead of CGO: `security find-generic-password -w` outputs the secret via stdout,
-	// not as a command-line arg, so there is no ps exposure.
-	// CGO SecItemCopyMatching prompts for permission when reading items created by other apps
-	// (e.g. `security add-generic-password` in E2E setup), so exec avoids the dialog entirely.
-	out, err := exec.CommandContext(ctx, "security", "find-generic-password", "-s", ref, "-a", account, "-w", path).Output() //nolint:gosec // ref, account, path are user-controlled, not attacker-controlled
+	data, found, err := cgoGet(path, ref, account)
 	if err != nil {
+		tracing.SetSpanError(span, err)
+		return "", err
+	}
+	if !found {
 		return "", &CacheMissError{Ref: ref}
 	}
 
 	var entry Entry
-	if err := json.Unmarshal([]byte(strings.TrimRight(string(out), "\r\n")), &entry); err != nil {
+	if err := json.Unmarshal(data, &entry); err != nil {
 		tracing.SetSpanError(span, err)
 		return "", fmt.Errorf("failed to parse cache entry: %w", err)
 	}

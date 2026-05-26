@@ -80,6 +80,51 @@ static int kcCountItems(const char *path) {
 	return count;
 }
 
+// kcGet retrieves password data for service/account from the keychain at path.
+// Returns 0 (found, caller must free *outData), 1 (not found), or -1 (error).
+static int kcGet(const char *path, const char *service, const char *account,
+                 void **outData, int *outLen) {
+	SecKeychainRef ref = NULL;
+	if (SecKeychainOpen(path, &ref) != noErr || ref == NULL) {
+		return -1;
+	}
+	CFStringRef svc = CFStringCreateWithCString(NULL, service, kCFStringEncodingUTF8);
+	CFStringRef acc = CFStringCreateWithCString(NULL, account, kCFStringEncodingUTF8);
+	CFArrayRef searchList = CFArrayCreate(NULL, (const void **)&ref, 1, &kCFTypeArrayCallBacks);
+	const void *keys[] = {
+		kSecClass, kSecAttrService, kSecAttrAccount,
+		kSecMatchSearchList, kSecMatchLimit, kSecReturnData,
+	};
+	const void *vals[] = {
+		kSecClassGenericPassword, svc, acc,
+		searchList, kSecMatchLimitOne, kCFBooleanTrue,
+	};
+	CFDictionaryRef query = CFDictionaryCreate(NULL, keys, vals, 6,
+	    &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+	CFTypeRef result = NULL;
+	OSStatus err = SecItemCopyMatching(query, &result);
+	CFRelease(query);
+	CFRelease(searchList);
+	CFRelease(acc);
+	CFRelease(svc);
+	CFRelease(ref);
+	if (err == errSecItemNotFound) {
+		*outData = NULL; *outLen = 0;
+		return 1;
+	}
+	if (err != noErr || result == NULL) {
+		return -1;
+	}
+	CFDataRef dat = (CFDataRef)result;
+	CFIndex len = CFDataGetLength(dat);
+	void *buf = malloc((size_t)len);
+	memcpy(buf, CFDataGetBytePtr(dat), (size_t)len);
+	CFRelease(result);
+	*outData = buf;
+	*outLen = (int)len;
+	return 0;
+}
+
 // kcAdd adds a generic password to the keychain referenced by kref.
 // SecItemAdd itself is not deprecated; only obtaining kref requires deprecated API.
 // kSecAttrAccess with NULL trusted list — any app can read without a permission dialog.
@@ -125,6 +170,29 @@ import (
 	"fmt"
 	"unsafe" //nolint:gocritic
 )
+
+func cgoGet(path, service, account string) (data []byte, found bool, err error) {
+	p := C.CString(path)
+	defer C.free(unsafe.Pointer(p))
+	s := C.CString(service)
+	defer C.free(unsafe.Pointer(s))
+	a := C.CString(account)
+	defer C.free(unsafe.Pointer(a))
+
+	var outData unsafe.Pointer
+	var outLen C.int
+	code := C.kcGet(p, s, a, &outData, &outLen) //nolint:gocritic // false positive: out-param pattern
+	switch code {
+	case 0:
+		b := C.GoBytes(outData, outLen)
+		C.free(outData)
+		return b, true, nil
+	case 1:
+		return nil, false, nil
+	default:
+		return nil, false, fmt.Errorf("SecItemCopyMatching: failed for %s", service)
+	}
+}
 
 func cgoGetStatus(path string) (unlocked bool, err error) {
 	p := C.CString(path)
