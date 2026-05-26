@@ -10,6 +10,10 @@ package keychain
 #include <Security/Security.h>
 #include <stdlib.h>
 
+// SecKeychainCopySettings: present in Security.framework binary (verified via .tbd)
+// but absent from public SDK headers — forward-declare to call it directly.
+extern OSStatus SecKeychainCopySettings(SecKeychainRef keychain, SecKeychainSettings *outSettings);
+
 // kcCreate creates a new keychain file at path, protected by password.
 // SecKeychainCreate is deprecated since macOS 12 — there is no non-deprecated
 // API to create a custom keychain file for a CLI tool.
@@ -122,6 +126,27 @@ static int kcGet(const char *path, const char *service, const char *account,
 	CFRelease(result);
 	*outData = buf;
 	*outLen = (int)len;
+	return 0;
+}
+
+// kcGetSettings retrieves lock settings from the keychain at path.
+// Returns 0 on success, -1 on error.
+// SecKeychainCopySettings always sets useLockInterval=false on arm64 macOS 15+
+// even when a timeout is stored; callers should rely on lockInterval directly.
+static int kcGetSettings(const char *path,
+                         int *lockOnSleep, unsigned int *lockInterval) {
+	SecKeychainRef ref = NULL;
+	if (SecKeychainOpen(path, &ref) != noErr || ref == NULL) {
+		return -1;
+	}
+	SecKeychainSettings settings = { SEC_KEYCHAIN_SETTINGS_VERS1, (Boolean)0, (Boolean)0, 0 };
+	OSStatus err = SecKeychainCopySettings(ref, &settings);
+	CFRelease(ref);
+	if (err != noErr) {
+		return -1;
+	}
+	*lockOnSleep = settings.lockOnSleep ? 1 : 0;
+	*lockInterval = (unsigned int)settings.lockInterval;
 	return 0;
 }
 
@@ -249,6 +274,26 @@ func cgoCreate(path, password string) error {
 		return fmt.Errorf("SecKeychainCreate: OSStatus %d", int(code))
 	}
 	return nil
+}
+
+// keychainSettings holds the lock configuration of a keychain.
+type keychainSettings struct {
+	LockOnSleep  bool
+	LockInterval uint32
+}
+
+func cgoGetSettings(path string) (keychainSettings, error) {
+	p := C.CString(path)
+	defer C.free(unsafe.Pointer(p))
+	var lockOnSleep C.int
+	var lockInterval C.uint
+	if code := C.kcGetSettings(p, &lockOnSleep, &lockInterval); code != 0 {
+		return keychainSettings{}, fmt.Errorf("SecKeychainCopySettings: failed for %s", path)
+	}
+	return keychainSettings{
+		LockOnSleep:  lockOnSleep != 0,
+		LockInterval: uint32(lockInterval),
+	}, nil
 }
 
 func cgoAdd(path, service, account, description string, data []byte) error {

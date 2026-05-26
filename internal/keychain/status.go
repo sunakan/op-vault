@@ -11,10 +11,12 @@ import (
 
 // StatusResult holds the state of the keychain.
 type StatusResult struct {
-	Initialized bool
-	Unlocked    bool
-	EntryCount  int
-	Path        string
+	Initialized  bool
+	Unlocked     bool
+	EntryCount   int
+	Path         string
+	LockInterval uint32
+	LockOnSleep  bool
 }
 
 // Status returns the current state of the keychain.
@@ -48,10 +50,18 @@ func Status(ctx context.Context) (StatusResult, error) {
 		return StatusResult{}, err
 	}
 
+	settings, err := cgoGetSettings(path)
+	if err != nil {
+		tracing.SetSpanError(span, err)
+		return StatusResult{}, err
+	}
+
 	return StatusResult{
-		Initialized: true,
-		Unlocked:    true,
-		EntryCount:  count,
-		Path:        path,
+		Initialized:  true,
+		Unlocked:     true,
+		EntryCount:   count,
+		Path:         path,
+		LockInterval: settings.LockInterval,
+		LockOnSleep:  settings.LockOnSleep,
 	}, nil
 }

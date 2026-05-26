@@ -809,6 +809,8 @@ expect_exit_code 0 'status (unlocked, 0 entries)'
 expect_stdout_contains 'status: unlocked' 'status unlocked'
 expect_stdout_contains "path: $KEYCHAIN_PATH" 'status unlocked path'
 expect_stdout_contains 'cache: 0 entries' 'status 0 entries'
+expect_stdout_contains 'auto-lock:' 'status shows auto-lock field'
+expect_stdout_contains 'lock-on-sleep:' 'status shows lock-on-sleep field'
 expect_stderr_empty 'status (unlocked, 0 entries)'
 
 #
@@ -827,7 +829,65 @@ run_cmd status
 expect_exit_code 0 'status (unlocked, 2 entries)'
 expect_stdout_contains 'status: unlocked' 'status unlocked 2'
 expect_stdout_contains 'cache: 2 entries' 'status 2 entries'
+expect_stdout_contains 'auto-lock:' 'status shows auto-lock field'
+expect_stdout_contains 'lock-on-sleep:' 'status shows lock-on-sleep field'
 expect_stderr_empty 'status (unlocked, 2 entries)'
+
+#
+# status (auto-lock: 10 minutes)
+#
+echo ''
+echo '=== status (auto-lock: 10 minutes) ==='
+# Given: reuse keychain from previous test, set 600s timeout
+security set-keychain-settings -t 600 "$KEYCHAIN_PATH"
+# When
+run_cmd status
+# Then
+expect_exit_code 0 'status (auto-lock: 10 minutes)'
+expect_stdout_contains 'auto-lock: 10 minutes' 'status auto-lock 10 minutes'
+expect_stderr_empty 'status (auto-lock: 10 minutes)'
+
+#
+# status (auto-lock: never)
+#
+echo ''
+echo '=== status (auto-lock: never) ==='
+# Given: disable auto-lock (no -t flag resets lockInterval to 0)
+security set-keychain-settings "$KEYCHAIN_PATH"
+# When
+run_cmd status
+# Then
+expect_exit_code 0 'status (auto-lock: never)'
+expect_stdout_contains 'auto-lock: never' 'status auto-lock never'
+expect_stderr_empty 'status (auto-lock: never)'
+
+#
+# status (lock-on-sleep: true)
+#
+echo ''
+echo '=== status (lock-on-sleep: true) ==='
+# Given: enable lock on sleep (-l flag, no -t = no timeout)
+security set-keychain-settings -l "$KEYCHAIN_PATH"
+# When
+run_cmd status
+# Then
+expect_exit_code 0 'status (lock-on-sleep: true)'
+expect_stdout_contains 'lock-on-sleep: true' 'status lock-on-sleep true'
+expect_stderr_empty 'status (lock-on-sleep: true)'
+
+#
+# status (lock-on-sleep: false)
+#
+echo ''
+echo '=== status (lock-on-sleep: false) ==='
+# Given: reset to defaults (no -l = lock-on-sleep false)
+security set-keychain-settings "$KEYCHAIN_PATH"
+# When
+run_cmd status
+# Then
+expect_exit_code 0 'status (lock-on-sleep: false)'
+expect_stdout_contains 'lock-on-sleep: false' 'status lock-on-sleep false'
+expect_stderr_empty 'status (lock-on-sleep: false)'
 
 #
 # status with OTLP
