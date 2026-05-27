@@ -84,7 +84,7 @@ func Set(ctx context.Context, account, ref, value string) error {
 		return fmt.Errorf("failed to marshal cache entry: %w", err)
 	}
 
-	if err := cgoAdd(path, ref, account, keychainKind, data); err != nil {
+	if err := cgoAdd(path, ref, account, keychainKind, ref, data); err != nil {
 		tracing.SetSpanError(span, err)
 		return err
 	}

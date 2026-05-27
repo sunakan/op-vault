@@ -158,11 +158,12 @@ static int kcGetSettings(const char *path,
 // silent access to cached secrets.
 static OSStatus kcAdd(SecKeychainRef kref,
                       const char *service, const char *account,
-                      const char *description,
+                      const char *description, const char *label,
                       const void *data, int dataLen) {
 	CFStringRef svc  = CFStringCreateWithCString(NULL, service,     kCFStringEncodingUTF8);
 	CFStringRef acc  = CFStringCreateWithCString(NULL, account,     kCFStringEncodingUTF8);
 	CFStringRef desc = CFStringCreateWithCString(NULL, description, kCFStringEncodingUTF8);
+	CFStringRef lbl  = CFStringCreateWithCString(NULL, label,       kCFStringEncodingUTF8);
 	CFDataRef   dat  = CFDataCreate(NULL, (const UInt8 *)data, (CFIndex)dataLen);
 
 	SecTrustedApplicationRef selfApp = NULL;
@@ -175,12 +176,12 @@ static OSStatus kcAdd(SecKeychainRef kref,
 
 	const void *keys[] = {
 		kSecClass, kSecAttrService, kSecAttrAccount,
-		kSecAttrDescription, kSecValueData, kSecUseKeychain, kSecAttrAccess,
+		kSecAttrDescription, kSecAttrLabel, kSecValueData, kSecUseKeychain, kSecAttrAccess,
 	};
 	const void *vals[] = {
-		kSecClassGenericPassword, svc, acc, desc, dat, kref, access,
+		kSecClassGenericPassword, svc, acc, desc, lbl, dat, kref, access,
 	};
-	CFDictionaryRef attrs = CFDictionaryCreate(NULL, keys, vals, 7,
+	CFDictionaryRef attrs = CFDictionaryCreate(NULL, keys, vals, 8,
 	    &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
 
 	OSStatus err = SecItemAdd(attrs, NULL);
@@ -204,6 +205,7 @@ static OSStatus kcAdd(SecKeychainRef kref,
 	CFRelease(attrs);
 	if (access) CFRelease(access);
 	CFRelease(dat);
+	CFRelease(lbl);
 	CFRelease(desc);
 	CFRelease(acc);
 	CFRelease(svc);
@@ -296,7 +298,7 @@ func cgoGetSettings(path string) (keychainSettings, error) {
 	}, nil
 }
 
-func cgoAdd(path, service, account, description string, data []byte) error {
+func cgoAdd(path, service, account, description, label string, data []byte) error {
 	p := C.CString(path)
 	defer C.free(unsafe.Pointer(p))
 
@@ -312,12 +314,14 @@ func cgoAdd(path, service, account, description string, data []byte) error {
 	defer C.free(unsafe.Pointer(acc))
 	desc := C.CString(description)
 	defer C.free(unsafe.Pointer(desc))
+	lbl := C.CString(label)
+	defer C.free(unsafe.Pointer(lbl))
 
 	var dataPtr unsafe.Pointer
 	if len(data) > 0 {
 		dataPtr = unsafe.Pointer(&data[0])
 	}
-	if code := C.kcAdd(kref, svc, acc, desc, dataPtr, C.int(len(data))); code != 0 {
+	if code := C.kcAdd(kref, svc, acc, desc, lbl, dataPtr, C.int(len(data))); code != 0 {
 		return fmt.Errorf("SecItemAdd: %s", osStatusString(int(code)))
 	}
 	return nil
