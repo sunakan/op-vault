@@ -271,7 +271,7 @@ func cgoCreate(path, password string) error {
 	pw := C.CString(password)
 	defer C.free(unsafe.Pointer(pw))
 	if code := C.kcCreate(p, pw, C.int(len(password))); code != 0 {
-		return fmt.Errorf("SecKeychainCreate: OSStatus %d", int(code))
+		return fmt.Errorf("SecKeychainCreate: %s", osStatusString(int(code)))
 	}
 	return nil
 }
@@ -302,7 +302,7 @@ func cgoAdd(path, service, account, description string, data []byte) error {
 
 	var kref C.SecKeychainRef
 	if code := C.kcOpen(p, &kref); code != 0 { //nolint:gocritic // false positive: gocritic misidentifies CGO out-param pattern as dupSubExpr
-		return fmt.Errorf("SecKeychainOpen: OSStatus %d", int(code))
+		return fmt.Errorf("SecKeychainOpen: %s", osStatusString(int(code)))
 	}
 	defer C.CFRelease(C.CFTypeRef(kref))
 
@@ -318,7 +318,7 @@ func cgoAdd(path, service, account, description string, data []byte) error {
 		dataPtr = unsafe.Pointer(&data[0])
 	}
 	if code := C.kcAdd(kref, svc, acc, desc, dataPtr, C.int(len(data))); code != 0 {
-		return fmt.Errorf("SecItemAdd: OSStatus %d", int(code))
+		return fmt.Errorf("SecItemAdd: %s", osStatusString(int(code)))
 	}
 	return nil
 }

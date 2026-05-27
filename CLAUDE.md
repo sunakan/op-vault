@@ -10,11 +10,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 make build       # バイナリビルド（CGO_ENABLED=1 が必要）
+make test        # 単体テスト（go test ./...）
 make e2e-test    # E2E テスト（ビルド → 実バイナリで CLI 動作検証）
 make lint        # golangci-lint + shellcheck（Docker 必須）
 make fmt         # go fmt + golangci-lint fmt（goimports） + shfmt（Docker 必須）
 make clean       # バイナリ削除
-go test ./...    # Go ユニットテスト（単体で実行可能）
 ```
 
 ビルドは darwin 専用（`//go:build darwin`）。`CGO_ENABLED=1` が必須（macOS Keychain API を CGO 経由で呼ぶため）。

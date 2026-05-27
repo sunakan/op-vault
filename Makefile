@@ -21,6 +21,10 @@ down: ## docker compose down
 open: ## Open Jaeger UI in browser
 	@open http://localhost:16686
 
+.PHONY: test
+test: ## 単体テスト
+	@go test ./...
+
 .PHONY: e2e-test
 e2e-test: ## e2e-test
 	@./scripts/e2e-test.sh
