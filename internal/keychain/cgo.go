@@ -192,6 +192,8 @@ static OSStatus kcAdd(SecKeychainRef kref,
 		const void *qvals[] = { kSecClassGenericPassword, svc, acc, searchList };
 		CFDictionaryRef query = CFDictionaryCreate(NULL, qkeys, qvals, 4,
 		    &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+		// kSecAttrAccess is intentionally omitted from the update dict — including it
+		// overwrites the existing access control and triggers multiple confirmation dialogs.
 		const void *ukeys[] = { kSecValueData };
 		const void *uvals[] = { dat };
 		CFDictionaryRef upd = CFDictionaryCreate(NULL, ukeys, uvals, 1,
