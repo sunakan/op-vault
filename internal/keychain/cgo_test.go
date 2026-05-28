@@ -3,6 +3,7 @@
 package keychain
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -83,7 +84,7 @@ func TestCgoAdd(t *testing.T) {
 		if !found {
 			t.Fatal("expected item to be retrievable after add")
 		}
-		if string(got) != string(want) {
+		if !bytes.Equal(got, want) {
 			t.Fatalf("got %q, want %q", got, want)
 		}
 	})
@@ -134,7 +135,7 @@ func TestCgoGet(t *testing.T) {
 		if !found {
 			t.Fatal("expected found=true")
 		}
-		if string(got) != string(want) {
+		if !bytes.Equal(got, want) {
 			t.Fatalf("got %q, want %q", got, want)
 		}
 	})
