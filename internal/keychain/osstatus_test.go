@@ -12,7 +12,7 @@ func TestOsStatusString(t *testing.T) {
 		code int
 		want string
 	}{
-		// 既知コード
+		// known codes
 		{-4, "unimplemented"},
 		{-50, "invalid parameter"},
 		{-108, "memory allocation failed"},
@@ -31,7 +31,7 @@ func TestOsStatusString(t *testing.T) {
 		{-25315, "interaction required"},
 		{-25320, "UI unavailable in dark wake"},
 		{-26275, "decode failed"},
-		// 未知コード: フォールバック
+		// unknown codes: fallback
 		{0, "OSStatus 0"},
 		{1, "OSStatus 1"},
 		{-99999, "OSStatus -99999"},
