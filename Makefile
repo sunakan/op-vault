@@ -29,6 +29,10 @@ test: ## 単体テスト
 e2e-test: ## e2e-test
 	@./scripts/e2e-test.sh
 
+.PHONY: e2e-test-integration
+e2e-test-integration: ## e2e-testで、実際に1Passwordから読み込むテスト(OP_ACCOUNT=xxxが必須)
+	@OP_TEST_INTEGRATION=1 ./scripts/e2e-test.sh
+
 .PHONY: fmt
 fmt: ## go fmt
 	@go fmt ./...
