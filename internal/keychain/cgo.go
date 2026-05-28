@@ -47,8 +47,9 @@ static OSStatus kcOpen(const char *path, SecKeychainRef *out) {
 	return SecKeychainOpen(path, out);
 }
 
-// kcGetStatus returns 1 if unlocked, 0 if locked, -1 on error.
-static int kcGetStatus(const char *path) {
+// kcGetStatus returns 1 if unlocked, 0 if locked, -1 on error (sets *outErr).
+static int kcGetStatus(const char *path, OSStatus *outErr) {
+	*outErr = noErr;
 	SecKeychainRef ref = NULL;
 	if (SecKeychainOpen(path, &ref) != noErr || ref == NULL) {
 		return -1;
@@ -57,14 +58,16 @@ static int kcGetStatus(const char *path) {
 	OSStatus err = SecKeychainGetStatus(ref, &status);
 	CFRelease(ref);
 	if (err != noErr) {
+		*outErr = err;
 		return -1;
 	}
 	return (status & kSecUnlockStateStatus) ? 1 : 0;
 }
 
 // kcCountItems returns the number of "1Password Cache" generic password items
-// in the keychain at path, or -1 on error.
-static int kcCountItems(const char *path) {
+// in the keychain at path, or -1 on error (sets *outErr).
+static int kcCountItems(const char *path, OSStatus *outErr) {
+	*outErr = noErr;
 	SecKeychainRef ref = NULL;
 	if (SecKeychainOpen(path, &ref) != noErr || ref == NULL) {
 		return -1;
@@ -92,15 +95,17 @@ static int kcCountItems(const char *path) {
 	} else if (err == errSecItemNotFound) {
 		count = 0;
 	} else {
+		*outErr = err;
 		count = -1;
 	}
 	return count;
 }
 
 // kcGet retrieves password data for service/account from the keychain at path.
-// Returns 0 (found, caller must free *outData), 1 (not found), or -1 (error).
+// Returns 0 (found, caller must free *outData), 1 (not found), or -1 (error, sets *outErr).
 static int kcGet(const char *path, const char *service, const char *account,
-                 void **outData, int *outLen) {
+                 void **outData, int *outLen, OSStatus *outErr) {
+	*outErr = noErr;
 	SecKeychainRef ref = NULL;
 	if (SecKeychainOpen(path, &ref) != noErr || ref == NULL) {
 		return -1;
@@ -130,6 +135,7 @@ static int kcGet(const char *path, const char *service, const char *account,
 		return 1;
 	}
 	if (err != noErr || result == NULL) {
+		*outErr = err;
 		return -1;
 	}
 	CFDataRef dat = (CFDataRef)result;
@@ -143,11 +149,12 @@ static int kcGet(const char *path, const char *service, const char *account,
 }
 
 // kcGetSettings retrieves lock settings from the keychain at path.
-// Returns 0 on success, -1 on error.
+// Returns 0 on success, -1 on error (sets *outErr).
 // SecKeychainCopySettings always sets useLockInterval=false on arm64 macOS 15+
 // even when a timeout is stored; callers should rely on lockInterval directly.
 static int kcGetSettings(const char *path,
-                         int *lockOnSleep, unsigned int *lockInterval) {
+                         int *lockOnSleep, unsigned int *lockInterval, OSStatus *outErr) {
+	*outErr = noErr;
 	SecKeychainRef ref = NULL;
 	if (SecKeychainOpen(path, &ref) != noErr || ref == NULL) {
 		return -1;
@@ -156,6 +163,7 @@ static int kcGetSettings(const char *path,
 	OSStatus err = SecKeychainCopySettings(ref, &settings);
 	CFRelease(ref);
 	if (err != noErr) {
+		*outErr = err;
 		return -1;
 	}
 	*lockOnSleep = settings.lockOnSleep ? 1 : 0;
@@ -245,7 +253,8 @@ func cgoGet(path, service, account string) (data []byte, found bool, err error) 
 
 	var outData unsafe.Pointer
 	var outLen C.int
-	code := C.kcGet(p, s, a, &outData, &outLen) //nolint:gocritic // false positive: out-param pattern
+	var outErr C.OSStatus
+	code := C.kcGet(p, s, a, &outData, &outLen, &outErr) //nolint:gocritic // false positive: out-param pattern
 	switch code {
 	case 0:
 		b := C.GoBytes(outData, outLen)
@@ -254,30 +263,32 @@ func cgoGet(path, service, account string) (data []byte, found bool, err error) 
 	case 1:
 		return nil, false, nil
 	default:
-		return nil, false, fmt.Errorf("SecItemCopyMatching: failed for %s", service)
+		return nil, false, fmt.Errorf("SecItemCopyMatching: %s (service=%s)", osStatusString(int(outErr)), service)
 	}
 }
 
 func cgoGetStatus(path string) (unlocked bool, err error) {
 	p := C.CString(path)
 	defer C.free(unsafe.Pointer(p))
-	code := C.kcGetStatus(p)
+	var outErr C.OSStatus
+	code := C.kcGetStatus(p, &outErr)
 	switch code {
 	case 1:
 		return true, nil
 	case 0:
 		return false, nil
 	default:
-		return false, fmt.Errorf("SecKeychainGetStatus: failed for %s", path)
+		return false, fmt.Errorf("SecKeychainGetStatus: %s", osStatusString(int(outErr)))
 	}
 }
 
 func cgoCountItems(path string) (int, error) {
 	p := C.CString(path)
 	defer C.free(unsafe.Pointer(p))
-	code := C.kcCountItems(p)
+	var outErr C.OSStatus
+	code := C.kcCountItems(p, &outErr)
 	if code < 0 {
-		return 0, fmt.Errorf("SecItemCopyMatching: failed for %s", path)
+		return 0, fmt.Errorf("SecItemCopyMatching: %s", osStatusString(int(outErr)))
 	}
 	return int(code), nil
 }
@@ -313,8 +324,9 @@ func cgoGetSettings(path string) (keychainSettings, error) {
 	defer C.free(unsafe.Pointer(p))
 	var lockOnSleep C.int
 	var lockInterval C.uint
-	if code := C.kcGetSettings(p, &lockOnSleep, &lockInterval); code != 0 {
-		return keychainSettings{}, fmt.Errorf("SecKeychainCopySettings: failed for %s", path)
+	var outErr C.OSStatus
+	if code := C.kcGetSettings(p, &lockOnSleep, &lockInterval, &outErr); code != 0 {
+		return keychainSettings{}, fmt.Errorf("SecKeychainCopySettings: %s", osStatusString(int(outErr)))
 	}
 	return keychainSettings{
 		LockOnSleep:  lockOnSleep != 0,
