@@ -25,6 +25,19 @@ static OSStatus kcCreate(const char *path, const char *password, int pwLen) {
 	return err;
 }
 
+// kcDelete removes the keychain at path from the search list and deletes the file.
+// SecKeychainDelete does not free the ref — CFRelease must be called separately.
+static OSStatus kcDelete(const char *path) {
+	SecKeychainRef ref = NULL;
+	OSStatus err = SecKeychainOpen(path, &ref);
+	if (err != noErr || ref == NULL) {
+		return err;
+	}
+	err = SecKeychainDelete(ref);
+	CFRelease(ref);
+	return err;
+}
+
 // kcOpen opens an existing keychain at path and returns its SecKeychainRef.
 // Caller must CFRelease the returned ref.
 // SecKeychainOpen is deprecated since macOS 12 — needed to target a specific
@@ -276,6 +289,15 @@ func cgoCreate(path, password string) error {
 	defer C.free(unsafe.Pointer(pw))
 	if code := C.kcCreate(p, pw, C.int(len(password))); code != 0 {
 		return fmt.Errorf("SecKeychainCreate: %s", osStatusString(int(code)))
+	}
+	return nil
+}
+
+func cgoDelete(path string) error {
+	p := C.CString(path)
+	defer C.free(unsafe.Pointer(p))
+	if code := C.kcDelete(p); code != 0 {
+		return fmt.Errorf("SecKeychainDelete: %s", osStatusString(int(code)))
 	}
 	return nil
 }
