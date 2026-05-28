@@ -27,10 +27,12 @@ func TestExtractImportPath(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		got := extractImportPath(test.fullName)
-		if got != test.expected {
-			t.Errorf("extractImportPath(%q) = %q; want %q", test.fullName, got, test.expected)
-		}
+	for _, tt := range tests {
+		t.Run(tt.fullName, func(t *testing.T) {
+			got := extractImportPath(tt.fullName)
+			if got != tt.expected {
+				t.Errorf("extractImportPath(%q) = %q; want %q", tt.fullName, got, tt.expected)
+			}
+		})
 	}
 }
