@@ -1,137 +1,79 @@
 <h1 align="center">op-vault</h1>
-<p align="center"><code>op read</code>（1Password CLI）の結果を macOS キーチェーンにキャッシュするラッパースクリプト。</p>
+<p align="center"><code>op read</code>（1Password CLI）の結果を macOS キーチェーンにキャッシュする CLI ツール。</p>
 
 <p align="center">
   <a href="./README.md">English</a> | 日本語
 </p>
 
-`op read` を呼ぶたびに 1Password サーバーへ通信する代わりに、キーチェーンにキャッシュされた値を即座に返す。キャッシュの有効期限は macOS キーチェーンの「非アクティブ自動ロック」機能をそのまま利用するため、TTL 管理のための別途仕組みは不要。
-
-`op read` はデスクトップアプリ連携を使っていても毎回 1Password サーバーへ通信する。これは 1Password のセキュリティモデルによる仕様。通常の遅延は **約1.8秒/回**（`op` デーモン起動済みの場合。初回はデーモン起動のため10秒以上かかることがある）。op-vault はキャッシュヒット時の遅延を数十ミリ秒以下に短縮する。
+`op read 'op://Vault名/Item名/password'` は決して速くない。op-vault はキャッシュすることで、2回目以降は即座に返す。
 
 ## 動作要件
 
 - macOS
 - [1Password デスクトップアプリ](https://1password.com/downloads/mac/)（CLI 連携を有効化）
-- `op` CLI
-- `jq`
+- Go（ソースからビルドする場合）
 
 ## インストール
-
-### 推奨: `~/.local/bin` にインストール
-
-```bash
-mkdir -p ~/.local/bin
-curl -o ~/.local/bin/op-vault https://raw.githubusercontent.com/sunakan/op-vault/main/op-vault.sh
-chmod +x ~/.local/bin/op-vault
-```
-
-`~/.local/bin` が `PATH` に含まれているか確認（含まれていなければ `~/.zshrc` に追加）:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-以降はどこからでも使えます:
-
-```bash
-op-vault read 'op://vault/item/field'
-```
-
-### アンインストール
-
-```bash
-# キャッシュのキーチェーンを削除
-op-vault clear
-
-# スクリプトを削除
-rm ~/.local/bin/op-vault
-```
-
-先にスクリプトを削除してしまった場合は、キーチェーンを手動で削除する:
-
-```bash
-# CLI で削除
-security delete-keychain ~/Library/Keychains/op-vault.keychain-db
-```
-
-または **キーチェーンアクセス.app** を開き、`op-vault` を右クリック → **"op-vault" キーチェーンを削除**。
-
-### リポジトリをクローン
 
 ```bash
 git clone https://github.com/sunakan/op-vault.git
 cd op-vault
-./op-vault.sh read 'op://vault/item/field'
+make build
+mv ./op-vault ~/.local/bin/op-vault  # ~/.local/bin が PATH に含まれていることを確認
 ```
 
-## 使い方
+## クイックスタート
 
 ```bash
-op-vault read <op://vault/item/field>   # キャッシュ付きで値を読み取る
-op-vault remove <op://...>              # 指定エントリを削除
-op-vault clear                          # キャッシュ全削除
-op-vault list                           # キャッシュ一覧を表示
-op-vault refresh                        # 全キャッシュを再取得
-op-vault status                         # キーチェーンの状態を表示
-op-vault update-idle-timeout <秒数>     # 自動ロックまでの時間を変更
+# 1. キーチェーンの初期化（初回のみ）
+#    パスワードを求められる。不要なら Enter を押す
+op-vault init
+
+# 2. シークレットの読み取り
+OP_ACCOUNT=my-account op-vault read 'op://Personal/GitHub/token'
 ```
 
-### 例
+## サブコマンド
 
-```bash
-# 初回: 1Password から取得してキャッシュ
-./op-vault.sh read 'op://Personal/GitHub/token'
-
-# 2回目以降: キャッシュから即座に返す（1Password への通信なし）
-./op-vault.sh read 'op://Personal/GitHub/token'
 ```
+op-vault init              キーチェーンを初期化する
+op-vault read <ref>        キャッシュまたは 1Password からシークレットを取得する
+op-vault set <ref> <val>   シークレットを手動でキャッシュする
+op-vault status            キーチェーンの状態とキャッシュ件数を表示する
+op-vault reset             キーチェーンを削除する
+op-vault version           バージョンを表示する
+```
+
+`read` と `set` は `--account` / `-a` または `OP_ACCOUNT` で 1Password アカウントの指定が必要。
 
 ## 仕組み
 
 専用のキーチェーン（`~/Library/Keychains/op-vault.keychain-db`）にシークレットを保存する。
 
-**キャッシュヒット**: キーチェーンがアンロック中かつエントリが存在する場合、1Password に通信せずに即座に値を返す。
+- **キャッシュヒット**: エントリが存在する場合、即座に返す。
+- **キャッシュミス**: エントリが存在しない場合、1Password から取得してキャッシュして返す。
 
-**キャッシュミス**: キーチェーンがロック中（IDLE_TIMEOUT 超過）またはエントリが未キャッシュの場合、`op read` で 1Password から取得してキーチェーンに保存してから返す。
-
-キーチェーンの非アクティブ自動ロックがキャッシュ期限として機能する。`op-vault read` を呼ばない状態が `IDLE_TIMEOUT` 秒続くとキーチェーンが自動ロックされ、次回は 1Password から再取得する。
-
-各エントリは元の ref・アイテム名・値を含む JSON として保存される:
-
-```json
-{"ref": "op://vault/item/field", "name": "アイテム名", "value": "<シークレット>"}
-```
-
-サービス名は ref の SHA256 ハッシュなので、UUID・スラッシュ・日本語等を含む任意の ref を安全に扱える。
+キーチェーンがロック中の場合、macOS がパスワード入力を求めてから検索する。一定時間使わないとキーチェーンが自動ロックされ、次回アクセス時にパスワードを求められる。
 
 ## 設定
 
 | 環境変数 | デフォルト | 説明 |
 |---|---|---|
-| `OP_VAULT_IDLE_TIMEOUT` | `3600` | 非アクティブ自動ロックまでの秒数（キーチェーン作成時のみ適用） |
-| `OP_VAULT_DEBUG` | （未設定） | `true` または `1` でデバッグ出力を有効化（`set -x`） |
-
-キーチェーン作成後に IDLE_TIMEOUT を変更するには `update-idle-timeout` を使う:
-
-```bash
-./op-vault.sh update-idle-timeout 1800  # 30分
-```
+| `OP_ACCOUNT` | （必須） | 1Password アカウントのメールアドレスまたは UUID |
+| `OP_VAULT_NAME` | `op-vault` | キーチェーン名 |
 
 ## キーチェーンのパスワード
 
-初回実行時にキーチェーンにパスワードを設定するか確認される:
+`op-vault init` 実行時にパスワードを求められる。
 
-```
-op-vault: キーチェーンにパスワードを設定しますか？ [y/N (default: N)]:
-```
+- **パスワードなし**（Enter を押す）: プロンプトは出るが Enter でアンロックできる。
+- **パスワードあり**: プロンプトでパスワードの入力が必要になる。
 
-デフォルト（パスワードなし）ではアンロック時にプロンプトが表示されない。パスワードを設定した場合、キャッシュミス時にアンロックプロンプトが表示される。
-
-## デバッグ
+## アンインストール
 
 ```bash
-OP_VAULT_DEBUG=true ./op-vault.sh read 'op://Test/test02/password'
+op-vault reset           # キーチェーンを削除
+rm ~/.local/bin/op-vault # バイナリを削除
 ```
 
 ## ライセンス

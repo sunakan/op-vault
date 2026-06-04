@@ -5,133 +5,75 @@
   English | <a href="./README.ja.md">日本語</a>
 </p>
 
-Instead of hitting the 1Password server on every call, op-vault returns the cached value from Keychain instantly. The cache expires automatically using Keychain's built-in inactivity auto-lock — no separate TTL management needed.
-
-`op read` contacts 1Password servers on every invocation — even with desktop app integration enabled. This is by design in 1Password's security model. Typical latency is **~1.8s per call** (after the `op` daemon has started; the first call can take 10s+ due to daemon startup). op-vault reduces cached reads to milliseconds.
+`op read 'op://Vault/Item/password'` is not exactly fast. op-vault caches the result, returning it instantly on subsequent calls.
 
 ## Requirements
 
 - macOS
 - [1Password desktop app](https://1password.com/downloads/mac/) with CLI integration enabled
-- `op` CLI
-- `jq`
+- Go (for building from source)
 
 ## Installation
-
-### Recommended: install to `~/.local/bin`
-
-```bash
-mkdir -p ~/.local/bin
-curl -o ~/.local/bin/op-vault https://raw.githubusercontent.com/sunakan/op-vault/main/op-vault.sh
-chmod +x ~/.local/bin/op-vault
-```
-
-Make sure `~/.local/bin` is in your `PATH` (add to `~/.zshrc` if needed):
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-Then use from anywhere:
-
-```bash
-op-vault read 'op://vault/item/field'
-```
-
-### Uninstall
-
-```bash
-# Delete the cache keychain
-op-vault clear
-
-# Remove the script
-rm ~/.local/bin/op-vault
-```
-
-If you removed the script first, delete the keychain manually:
-
-```bash
-# via CLI
-security delete-keychain ~/Library/Keychains/op-vault.keychain-db
-```
-
-Or open **Keychain Access.app** → find `op-vault` → right-click → **Delete Keychain "op-vault"**.
-
-### Clone the repository
 
 ```bash
 git clone https://github.com/sunakan/op-vault.git
 cd op-vault
-./op-vault.sh read 'op://vault/item/field'
+make build
+mv ./op-vault ~/.local/bin/op-vault  # ensure ~/.local/bin is in your PATH
 ```
 
-## Usage
+## Quick Start
 
 ```bash
-op-vault read <op://vault/item/field>   # Read with cache
-op-vault remove <op://...>              # Remove a specific entry
-op-vault clear                          # Delete all cache
-op-vault list                           # List cached entries
-op-vault refresh                        # Re-fetch all cached secrets
-op-vault status                         # Show keychain status
-op-vault update-idle-timeout <seconds>  # Change auto-lock timeout
+# 1. Initialize the keychain (run once)
+#    You will be prompted for a password (press Enter to skip)
+op-vault init
+
+# 2. Read a secret
+OP_ACCOUNT=my-account op-vault read 'op://Personal/GitHub/token'
 ```
 
-### Example
+## Subcommands
 
-```bash
-# First call: fetches from 1Password and caches
-./op-vault.sh read 'op://Personal/GitHub/token'
-
-# Subsequent calls: returns from cache instantly (no 1Password request)
-./op-vault.sh read 'op://Personal/GitHub/token'
 ```
+op-vault init              Initialize the keychain
+op-vault read <ref>        Get a secret from cache or 1Password
+op-vault set <ref> <val>   Manually cache a secret
+op-vault status            Show keychain status and cache entry count
+op-vault reset             Remove the keychain
+op-vault version           Print version
+```
+
+`read` and `set` require a 1Password account via `--account` / `-a` or `OP_ACCOUNT`.
 
 ## How It Works
 
 op-vault uses a dedicated Keychain (`~/Library/Keychains/op-vault.keychain-db`) to store secrets.
 
-**Cache hit**: If the Keychain is unlocked and the entry exists, the value is returned immediately without contacting 1Password.
+- **Cache hit**: entry exists — returns immediately.
+- **Cache miss**: entry doesn't exist — fetches from 1Password, caches, and returns.
 
-**Cache miss**: If the Keychain is locked (idle timeout exceeded) or the entry doesn't exist, `op read` fetches the value from 1Password, stores it in Keychain, and returns it.
-
-The Keychain's inactivity auto-lock acts as the cache expiration mechanism. If `op-vault read` is not called for `IDLE_TIMEOUT` seconds, the Keychain locks automatically and the next call re-fetches from 1Password.
-
-Each entry is stored as JSON containing the original ref, item name, and value:
-
-```json
-{"ref": "op://vault/item/field", "name": "Item Title", "value": "<secret>"}
-```
-
-The service name is a SHA256 hash of the ref, so any ref (including UUIDs, Japanese characters, etc.) is handled safely.
+If the Keychain is locked, macOS prompts for the password before the lookup. The cache expires when the Keychain auto-locks after inactivity.
 
 ## Configuration
 
 | Environment Variable | Default | Description |
 |---|---|---|
-| `OP_VAULT_IDLE_TIMEOUT` | `3600` | Inactivity auto-lock timeout in seconds (applied only at keychain creation) |
-| `OP_VAULT_DEBUG` | (unset) | Set to `true` or `1` to enable debug output (`set -x`) |
-
-After the Keychain is created, use `op-vault update-idle-timeout` to change the timeout:
-
-```bash
-./op-vault.sh update-idle-timeout 1800  # 30 minutes
-```
+| `OP_ACCOUNT` | (required) | 1Password account email or UUID |
+| `OP_VAULT_NAME` | `op-vault` | Keychain name |
 
 ## Keychain Password
 
-On first run, op-vault prompts whether to set a password on the Keychain:
+`op-vault init` prompts for a keychain password.
 
-```
-op-vault: キーチェーンにパスワードを設定しますか？ [y/N (default: N)]:
-```
+- **No password** (press Enter): macOS prompts, but pressing Enter unlocks it.
+- **With password**: macOS prompts and requires the password to unlock.
 
-The default (no password) allows silent unlocking — no prompt on cache miss. If you set a password, you'll be prompted when the Keychain needs to be unlocked.
-
-## Debugging
+## Uninstall
 
 ```bash
-OP_VAULT_DEBUG=true ./op-vault.sh read 'op://Test/test02/password'
+op-vault reset           # delete the keychain
+rm ~/.local/bin/op-vault # remove the binary
 ```
 
 ## License
