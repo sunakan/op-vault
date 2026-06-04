@@ -15,7 +15,8 @@ import (
 	"github.com/sunakan/op-vault/internal/tracing"
 )
 
-const version = "0.0.0"
+// version is set at build time via -ldflags "-X main.version=x.y.z".
+var version = "0.0.0"
 
 type CLI struct {
 	Version cli.VersionCmd `cmd:"" help:"Print version"`
