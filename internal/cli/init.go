@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sunakan/op-keychain/internal/keychain"
-	"github.com/sunakan/op-keychain/internal/tracing"
+	"github.com/sunakan/op-vault/internal/keychain"
+	"github.com/sunakan/op-vault/internal/tracing"
 )
 
 // InitCmd implements the init subcommand

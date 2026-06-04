@@ -3,11 +3,11 @@
 ################################################################################
 .PHONY: build
 build: ## バイナリビルド
-	@CGO_ENABLED=1 go build -o op-keychain ./cmd/op-keychain
+	@CGO_ENABLED=1 go build -o op-vault ./cmd/op-vault
 
 .PHONY: clean
 clean: ## バイナリ削除
-	@rm -rf op-keychain
+	@rm -rf op-vault
 
 .PHONY: up
 up: ## docker compose up -d

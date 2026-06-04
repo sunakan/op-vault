@@ -1,4 +1,4 @@
-module github.com/sunakan/op-keychain
+module github.com/sunakan/op-vault
 
 go 1.26.3
 

@@ -11,12 +11,12 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/sunakan/op-keychain/internal/tracing"
+	"github.com/sunakan/op-vault/internal/tracing"
 )
 
 // ReadPassword reads a password from stdin.
 // If stdin is a TTY, it prompts on stderr with no echo; the OTel span duration includes user input time.
-// Otherwise, it reads from stdin directly (e.g. echo 'password' | op-keychain init).
+// Otherwise, it reads from stdin directly (e.g. echo 'password' | op-vault init).
 func ReadPassword(ctx context.Context) (string, error) {
 	_, span := tracing.Tracer().Start(ctx, "ReadPassword")
 	defer span.End()

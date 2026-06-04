@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sunakan/op-keychain/internal/tracing"
+	"github.com/sunakan/op-vault/internal/tracing"
 )
 
 const keychainKind = "1Password Cache"

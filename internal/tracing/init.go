@@ -19,10 +19,10 @@ import (
 )
 
 // Init sets up the global TracerProvider and returns a shutdown function.
-// OP_KEYCHAIN_TRACES_EXPORTER selects the exporter: none (default) | stdout | otlp.
-// For otlp, OP_KEYCHAIN_OTLP_ENDPOINT sets the collector endpoint (required).
+// OP_VAULT_TRACES_EXPORTER selects the exporter: none (default) | stdout | otlp.
+// For otlp, OP_VAULT_OTLP_ENDPOINT sets the collector endpoint (required).
 func Init(ctx context.Context, serviceName, version string) (func(context.Context) error, error) {
-	exporterName := os.Getenv("OP_KEYCHAIN_TRACES_EXPORTER")
+	exporterName := os.Getenv("OP_VAULT_TRACES_EXPORTER")
 	if exporterName == "" || exporterName == "none" {
 		return func(context.Context) error { return nil }, nil
 	}
@@ -62,12 +62,12 @@ func newExporter(ctx context.Context, name string) (sdktrace.SpanExporter, error
 	case "stdout":
 		return stdouttrace.New(stdouttrace.WithWriter(os.Stderr))
 	case "otlp":
-		endpoint := os.Getenv("OP_KEYCHAIN_OTLP_ENDPOINT")
+		endpoint := os.Getenv("OP_VAULT_OTLP_ENDPOINT")
 		if endpoint == "" {
-			return nil, errors.New("OP_KEYCHAIN_OTLP_ENDPOINT is required when OP_KEYCHAIN_TRACES_EXPORTER=otlp")
+			return nil, errors.New("OP_VAULT_OTLP_ENDPOINT is required when OP_VAULT_TRACES_EXPORTER=otlp")
 		}
 		return otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(endpoint))
 	default:
-		return nil, fmt.Errorf("unknown OP_KEYCHAIN_TRACES_EXPORTER: %q (none|stdout|otlp)", name)
+		return nil, fmt.Errorf("unknown OP_VAULT_TRACES_EXPORTER: %q (none|stdout|otlp)", name)
 	}
 }

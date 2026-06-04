@@ -21,7 +21,7 @@ func Tracer() trace.Tracer {
 }
 
 // extractImportPath strips the function name from a fully-qualified Go symbol.
-// e.g. "github.com/sunakan/op-keychain/internal/cli.(*VersionCmd).Run" → "github.com/sunakan/op-keychain/internal/cli"
+// e.g. "github.com/sunakan/op-vault/internal/cli.(*VersionCmd).Run" → "github.com/sunakan/op-vault/internal/cli"
 func extractImportPath(funcName string) string {
 	lastSlash := strings.LastIndex(funcName, "/")
 	suffix := funcName

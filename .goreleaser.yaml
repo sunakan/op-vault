@@ -1,9 +1,9 @@
 version: 2
 
 builds:
-  - id: op-keychain
-    main: ./cmd/op-keychain
-    binary: op-keychain
+  - id: op-vault
+    main: ./cmd/op-vault
+    binary: op-vault
     goos:
       - darwin
     goarch:
@@ -26,6 +26,6 @@ checksum:
 release:
   github:
     owner: sunakan
-    name: op-keychain
+    name: op-vault
   draft: false
   prerelease: auto

@@ -12,7 +12,7 @@ set -uo pipefail
 #
 # Global variables
 #
-TEST_CHAIN='op-keychain-e2e-test'
+TEST_CHAIN='op-vault-e2e-test'
 KEYCHAIN_PATH="$HOME/Library/Keychains/${TEST_CHAIN}.keychain-db"
 JAEGER_UI='http://localhost:16686'
 JAEGER_OTLP='http://localhost:4318'
@@ -116,7 +116,7 @@ expect_stdout_matches() {
 
 run_cmd() {
   perl -e "alarm ${CMD_TIMEOUT_SEC}; exec @ARGV" \
-    env OP_KEYCHAIN_NAME="$TEST_CHAIN" ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+    env OP_VAULT_NAME="$TEST_CHAIN" ./op-vault "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
   STDERR=$(cat "$STDERR_TMP")
@@ -124,7 +124,7 @@ run_cmd() {
 
 run_cmd_otlp() {
   perl -e "alarm ${CMD_TIMEOUT_SEC}; exec @ARGV" \
-    env OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER=otlp OP_KEYCHAIN_OTLP_ENDPOINT="$JAEGER_OTLP" OTEL_RESOURCE_ATTRIBUTES='' ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+    env OP_VAULT_NAME="$TEST_CHAIN" OP_VAULT_TRACES_EXPORTER=otlp OP_VAULT_OTLP_ENDPOINT="$JAEGER_OTLP" OTEL_RESOURCE_ATTRIBUTES='' ./op-vault "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
   STDERR=$(cat "$STDERR_TMP")
@@ -134,7 +134,7 @@ run_cmd_stdin() {
   local input="$1"
   shift
   printf '%s' "$input" | perl -e "alarm ${CMD_TIMEOUT_SEC}; exec @ARGV" \
-    env OP_KEYCHAIN_NAME="$TEST_CHAIN" ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+    env OP_VAULT_NAME="$TEST_CHAIN" ./op-vault "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
   STDERR=$(cat "$STDERR_TMP")
@@ -144,7 +144,7 @@ run_cmd_stdin_otlp() {
   local input="$1"
   shift
   printf '%s' "$input" | perl -e "alarm ${CMD_TIMEOUT_SEC}; exec @ARGV" \
-    env OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER=otlp OP_KEYCHAIN_OTLP_ENDPOINT="$JAEGER_OTLP" OTEL_RESOURCE_ATTRIBUTES='' ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+    env OP_VAULT_NAME="$TEST_CHAIN" OP_VAULT_TRACES_EXPORTER=otlp OP_VAULT_OTLP_ENDPOINT="$JAEGER_OTLP" OTEL_RESOURCE_ATTRIBUTES='' ./op-vault "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
   STDERR=$(cat "$STDERR_TMP")
@@ -152,7 +152,7 @@ run_cmd_stdin_otlp() {
 
 run_cmd_no_account() {
   perl -e "alarm ${CMD_TIMEOUT_SEC}; exec @ARGV" \
-    env -u OP_ACCOUNT OP_KEYCHAIN_NAME="$TEST_CHAIN" ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+    env -u OP_ACCOUNT OP_VAULT_NAME="$TEST_CHAIN" ./op-vault "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
   STDERR=$(cat "$STDERR_TMP")
@@ -162,7 +162,7 @@ run_cmd_with_exporter() {
   local exporter="$1"
   shift
   perl -e "alarm ${CMD_TIMEOUT_SEC}; exec @ARGV" \
-    env OP_KEYCHAIN_NAME="$TEST_CHAIN" OP_KEYCHAIN_TRACES_EXPORTER="$exporter" OP_KEYCHAIN_OTLP_ENDPOINT='' OTEL_RESOURCE_ATTRIBUTES='' ./op-keychain "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
+    env OP_VAULT_NAME="$TEST_CHAIN" OP_VAULT_TRACES_EXPORTER="$exporter" OP_VAULT_OTLP_ENDPOINT='' OTEL_RESOURCE_ATTRIBUTES='' ./op-vault "$@" >"$STDOUT_TMP" 2>"$STDERR_TMP"
   STATUS=$?
   STDOUT=$(cat "$STDOUT_TMP")
   STDERR=$(cat "$STDERR_TMP")
@@ -278,7 +278,7 @@ echo '=== --help ==='
 
 run_cmd --help
 expect_exit_code 0 '--help'
-expect_stdout_contains 'op-keychain' '--help output is in stdout'
+expect_stdout_contains 'op-vault' '--help output is in stdout'
 expect_stderr_empty '--help'
 
 for sub in version init reset read; do
@@ -291,7 +291,7 @@ done
 
 run_cmd -h
 expect_exit_code 0 '-h'
-expect_stdout_contains 'op-keychain' '-h output is in stdout'
+expect_stdout_contains 'op-vault' '-h output is in stdout'
 expect_stderr_empty '-h'
 
 #
@@ -302,7 +302,7 @@ echo '=== Invalid TRACES_EXPORTER ==='
 run_cmd_with_exporter invalid version
 expect_exit_code 1 'invalid exporter'
 expect_stdout_empty 'invalid exporter'
-expect_stderr_contains 'unknown OP_KEYCHAIN_TRACES_EXPORTER' 'invalid exporter error message'
+expect_stderr_contains 'unknown OP_VAULT_TRACES_EXPORTER' 'invalid exporter error message'
 
 #
 # OTLP without endpoint
@@ -312,7 +312,7 @@ echo '=== OTLP without endpoint ==='
 run_cmd_with_exporter otlp version
 expect_exit_code 1 'otlp without endpoint'
 expect_stdout_empty 'otlp without endpoint'
-expect_stderr_contains 'OP_KEYCHAIN_OTLP_ENDPOINT is required' 'otlp endpoint required error message'
+expect_stderr_contains 'OP_VAULT_OTLP_ENDPOINT is required' 'otlp endpoint required error message'
 
 #
 # version
@@ -345,7 +345,7 @@ expect_exit_code 0 'version with OTLP'
 expect_stdout_matches '^[0-9]+\.[0-9]+\.[0-9]+$' 'version stdout matches x.y.z with OTLP'
 expect_stderr_empty 'version with OTLP'
 sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
 expect_span_name 'version' 'version span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
@@ -369,7 +369,7 @@ run_cmd_otlp unknown
 expect_exit_code 2 'unknown sub command with OTLP'
 expect_stdout_empty 'unknown sub command with OTLP'
 sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
 expect_span_name 'main' 'main span received by Jaeger'
 expect_span_status_error 'main span has error status'
 
@@ -380,7 +380,7 @@ echo ''
 echo '=== No subcommand ==='
 run_cmd
 expect_exit_code 0 'no subcommand'
-expect_stdout_contains 'op-keychain' 'no subcommand shows help'
+expect_stdout_contains 'op-vault' 'no subcommand shows help'
 expect_stderr_empty 'no subcommand'
 
 #
@@ -439,7 +439,7 @@ expect_exit_code 0 'init with OTLP'
 expect_stdout_empty 'init with OTLP'
 expect_stderr_contains "Initialized $KEYCHAIN_PATH" 'init with OTLP'
 sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
 expect_span_name 'init' 'init span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
@@ -505,7 +505,7 @@ expect_stdout_empty 'reset with OTLP'
 expect_stderr_contains "deleted: $TEST_CHAIN" 'reset with OTLP deletes keychain'
 expect_file_not_exists "$KEYCHAIN_PATH" 'reset removes keychain file'
 sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
 expect_span_name 'reset' 'reset span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
@@ -531,7 +531,7 @@ run_cmd set "op://Test/Item/password" "secret"
 # Then
 expect_exit_code 1 'set (keychain not found)'
 expect_stdout_empty 'set (keychain not found)'
-expect_stderr_contains "keychain not found: run 'op-keychain init'" 'set (keychain not found)'
+expect_stderr_contains "keychain not found: run 'op-vault init'" 'set (keychain not found)'
 
 #
 # set (no account)
@@ -611,7 +611,7 @@ expect_exit_code 0 'set with OTLP'
 expect_stdout_empty 'set with OTLP'
 expect_stderr_contains 'cached: op://Test/SetItem/password' 'set with OTLP output'
 sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
 expect_span_name 'set' 'set span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
@@ -726,7 +726,7 @@ run_cmd read "op://Private/MyItem/password"
 # Then
 expect_exit_code 1 'read (not found keychain)'
 expect_stdout_empty 'read (not found keychain)'
-expect_stderr_contains "keychain not found: run 'op-keychain init'" 'read (not found keychain)'
+expect_stderr_contains "keychain not found: run 'op-vault init'" 'read (not found keychain)'
 
 #
 # read with OTLP
@@ -747,7 +747,7 @@ expect_exit_code 0 'read with OTLP'
 expect_stdout_contains 'supersecret' 'read with OTLP stdout'
 expect_stderr_empty 'read with OTLP'
 sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
 expect_span_name 'read' 'read span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
@@ -906,7 +906,7 @@ expect_exit_code 0 'status with OTLP'
 expect_stdout_contains 'status: unlocked' 'status with OTLP output'
 expect_stderr_empty 'status with OTLP'
 sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-keychain&start=${START_US}&limit=5")
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
 expect_span_name 'status' 'status span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 

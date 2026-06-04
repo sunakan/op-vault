@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sunakan/op-keychain/internal/keychain"
-	"github.com/sunakan/op-keychain/internal/tracing"
+	"github.com/sunakan/op-vault/internal/keychain"
+	"github.com/sunakan/op-vault/internal/tracing"
 )
 
 // SetCmd implements the set subcommand.
@@ -40,7 +40,7 @@ func (c *SetCmd) Run(ctx context.Context) error {
 		tracing.SetSpanError(span, err)
 		var notFound *keychain.NotFoundError
 		if errors.As(err, &notFound) {
-			return errors.New("keychain not found: run 'op-keychain init'")
+			return errors.New("keychain not found: run 'op-vault init'")
 		}
 		return err
 	}

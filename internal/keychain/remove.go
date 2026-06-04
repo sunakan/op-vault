@@ -5,7 +5,7 @@ package keychain
 import (
 	"context"
 
-	"github.com/sunakan/op-keychain/internal/tracing"
+	"github.com/sunakan/op-vault/internal/tracing"
 )
 
 // Remove removes a keychain at the given path.

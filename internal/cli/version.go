@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/sunakan/op-keychain/internal/tracing"
+	"github.com/sunakan/op-vault/internal/tracing"
 )
 
 // VersionCmd implements the version subcommand

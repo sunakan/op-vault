@@ -10,12 +10,12 @@ func TestExtractImportPath(t *testing.T) {
 		expected string
 	}{
 		{
-			fullName: "github.com/sunakan/op-keychain/internal/cli.(*VersionCmd).Run",
-			expected: "github.com/sunakan/op-keychain/internal/cli",
+			fullName: "github.com/sunakan/op-vault/internal/cli.(*VersionCmd).Run",
+			expected: "github.com/sunakan/op-vault/internal/cli",
 		},
 		{
-			fullName: "github.com/sunakan/op-keychain/internal/tracing.Tracer",
-			expected: "github.com/sunakan/op-keychain/internal/tracing",
+			fullName: "github.com/sunakan/op-vault/internal/tracing.Tracer",
+			expected: "github.com/sunakan/op-vault/internal/tracing",
 		},
 		{
 			fullName: "main.main",

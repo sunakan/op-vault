@@ -6,7 +6,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/sunakan/op-keychain/internal/tracing"
+	"github.com/sunakan/op-vault/internal/tracing"
 )
 
 // StatusResult holds the state of the keychain.

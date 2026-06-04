@@ -10,9 +10,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sunakan/op-keychain/internal/keychain"
-	"github.com/sunakan/op-keychain/internal/op"
-	"github.com/sunakan/op-keychain/internal/tracing"
+	"github.com/sunakan/op-vault/internal/keychain"
+	"github.com/sunakan/op-vault/internal/op"
+	"github.com/sunakan/op-vault/internal/tracing"
 )
 
 // ReadCmd implements the read subcommand
@@ -62,7 +62,7 @@ func (c *ReadCmd) Run(ctx context.Context) error {
 	var notFound *keychain.NotFoundError
 	if errors.As(err, &notFound) {
 		tracing.SetSpanError(span, err)
-		return errors.New("keychain not found: run 'op-keychain init'")
+		return errors.New("keychain not found: run 'op-vault init'")
 	}
 
 	tracing.SetSpanError(span, err)

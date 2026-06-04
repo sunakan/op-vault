@@ -7,7 +7,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/sunakan/op-keychain
+        - github.com/sunakan/op-vault
 
 linters:
   default: standard

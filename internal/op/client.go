@@ -10,7 +10,7 @@ import (
 
 	onepassword "github.com/1password/onepassword-sdk-go"
 
-	"github.com/sunakan/op-keychain/internal/tracing"
+	"github.com/sunakan/op-vault/internal/tracing"
 )
 
 // Resolve returns the secret value for the given op:// reference.
@@ -20,7 +20,7 @@ func Resolve(ctx context.Context, account, ref string) (string, error) {
 
 	c, err := onepassword.NewClient(ctx,
 		onepassword.WithDesktopAppIntegration(account),
-		onepassword.WithIntegrationInfo("op-keychain", "0.0.0"),
+		onepassword.WithIntegrationInfo("op-vault", "0.0.0"),
 	)
 	if err != nil {
 		tracing.SetSpanError(span, err)

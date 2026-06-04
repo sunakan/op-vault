@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 )
 
-// DefaultName is the keychain name used when OP_KEYCHAIN_NAME is not set.
-const DefaultName = "op-keychain"
+// DefaultName is the keychain name used when OP_VAULT_NAME is not set.
+const DefaultName = "op-vault"
 
-// Name returns OP_KEYCHAIN_NAME if set, otherwise DefaultName.
+// Name returns OP_VAULT_NAME if set, otherwise DefaultName.
 func Name() string {
-	if name := os.Getenv("OP_KEYCHAIN_NAME"); name != "" {
+	if name := os.Getenv("OP_VAULT_NAME"); name != "" {
 		return name
 	}
 	return DefaultName

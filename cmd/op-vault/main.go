@@ -1,6 +1,6 @@
 //go:build darwin
 
-// Program op-keychain caches op:// secrets in macOS Keychain.
+// Program op-vault caches op:// secrets in macOS Keychain.
 package main
 
 import (
@@ -11,8 +11,8 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/sunakan/op-keychain/internal/cli"
-	"github.com/sunakan/op-keychain/internal/tracing"
+	"github.com/sunakan/op-vault/internal/cli"
+	"github.com/sunakan/op-vault/internal/tracing"
 )
 
 const version = "0.0.0"
@@ -35,7 +35,7 @@ func main() {
 
 func run() int {
 	ctx := context.Background()
-	shutdown, err := tracing.Init(ctx, "op-keychain", version)
+	shutdown, err := tracing.Init(ctx, "op-vault", version)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -49,7 +49,7 @@ func run() int {
 		Version: cli.VersionCmd{Version: version},
 	}
 	kongCtx := kong.Parse(&c,
-		kong.Name("op-keychain"),
+		kong.Name("op-vault"),
 		kong.Description("Cache op:// secrets in macOS Keychain"),
 		kong.Exit(func(code int) {
 			if code != 0 {

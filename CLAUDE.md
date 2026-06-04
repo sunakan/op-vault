@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-`op-keychain` は `op read`（1Password CLI）の結果を macOS Keychain にキャッシュする CLI ツール。`op read` の ~1.8s のレイテンシをキャッシュで回避するのが目的。
+`op-vault` は `op read`（1Password CLI）の結果を macOS Keychain にキャッシュする CLI ツール。`op read` の ~1.8s のレイテンシをキャッシュで回避するのが目的。
 
 ## Commands
 
@@ -24,7 +24,7 @@ make clean       # バイナリ削除
 ## Architecture
 
 ```
-cmd/op-keychain/main.go   エントリポイント。run() に処理を委譲して os.Exit のみ main で呼ぶ
+cmd/op-vault/main.go   エントリポイント。run() に処理を委譲して os.Exit のみ main で呼ぶ
 internal/cli/             kong サブコマンド実装
 internal/tracing/         OTel 計装（TracerProvider 初期化・Tracer アクセサ・スパンユーティリティ）
 scripts/e2e-test.sh       実バイナリを直接実行する E2E テスト
@@ -41,8 +41,8 @@ scripts/e2e-test.sh       実バイナリを直接実行する E2E テスト
 - `tracing.Init()` で TracerProvider を初期化し shutdown 関数を返す
 - `tracing.Tracer()` で呼び出し元パッケージパスを自動でトレーサー名にする（`runtime.Caller` を使用）
 - `tracing.SetSpanError(span, err)` でエラーを記録する（`RecordError` だけではステータスが `Error` にならないため）
-- exporter は `OP_KEYCHAIN_TRACES_EXPORTER` 環境変数で切り替える（`none`（デフォルト）/ `stdout` / `otlp`）
-- `otlp` の場合は `OP_KEYCHAIN_OTLP_ENDPOINT` が必須
+- exporter は `OP_VAULT_TRACES_EXPORTER` 環境変数で切り替える（`none`（デフォルト）/ `stdout` / `otlp`）
+- `otlp` の場合は `OP_VAULT_OTLP_ENDPOINT` が必須
 
 `OTEL_RESOURCE_ATTRIBUTES` がシェルに設定されている場合、`WithResource()` が内部で `resource.Environment()` とマージするため、その属性が Resource に混入する（SDK の意図的な仕様）。
 
@@ -56,4 +56,4 @@ ls $(go env GOMODCACHE)/go.opentelemetry.io/otel@<version>/semconv/ | sort -V | 
 
 ## Import 順序
 
-`make fmt`（goimports）で自動整形される。標準ライブラリ → サードパーティ → `github.com/sunakan/op-keychain/...` の 3 グループ。
+`make fmt`（goimports）で自動整形される。標準ライブラリ → サードパーティ → `github.com/sunakan/op-vault/...` の 3 グループ。
