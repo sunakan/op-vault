@@ -5,6 +5,7 @@ package keychain
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -89,6 +90,24 @@ func TestCgoAdd(t *testing.T) {
 		}
 	})
 
+	t.Run("empty data", func(t *testing.T) {
+		path := newTempKeychain(t)
+		ref, account := "op://V/Item/f", "acct"
+		if err := cgoAdd(path, ref, account, keychainKind, ref, []byte{}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		got, found, err := cgoGet(path, ref, account)
+		if err != nil {
+			t.Fatalf("cgoGet: %v", err)
+		}
+		if !found {
+			t.Fatal("expected found=true after adding empty data")
+		}
+		if len(got) != 0 {
+			t.Fatalf("got %q, want empty", got)
+		}
+	})
+
 	// NOTE: cgoAdd on a nonexistent keychain path does NOT return an error.
 	// SecKeychainOpen is lazy (always returns noErr), and SecItemAdd silently
 	// falls back to the login keychain. Intentionally not tested to avoid
@@ -164,6 +183,37 @@ func TestCgoGet(t *testing.T) {
 		}
 	})
 
+	t.Run("locked empty-password keychain unlocks silently", func(t *testing.T) {
+		// Verifies that SecKeychainUnlock(empty) in kcGet silently unlocks a
+		// no-password keychain without triggering a macOS dialog.
+		path := filepath.Join(t.TempDir(), "test.keychain-db")
+		if err := cgoCreate(path, ""); err != nil {
+			t.Fatalf("cgoCreate: %v", err)
+		}
+		t.Cleanup(func() { _ = cgoDelete(path) })
+
+		ref, account := "op://V/Item/f", "acct"
+		want := []byte(`"secret"`)
+		if err := cgoAdd(path, ref, account, keychainKind, ref, want); err != nil {
+			t.Fatalf("cgoAdd: %v", err)
+		}
+
+		if out, err := exec.Command("security", "lock-keychain", path).CombinedOutput(); err != nil {
+			t.Fatalf("security lock-keychain: %v: %s", err, out)
+		}
+
+		got, found, err := cgoGet(path, ref, account)
+		if err != nil {
+			t.Fatalf("unexpected error after silent unlock: %v", err)
+		}
+		if !found {
+			t.Fatal("expected found=true after silent unlock")
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	})
+
 	t.Run("different account returns not found", func(t *testing.T) {
 		path := newTempKeychain(t)
 		ref := "op://V/Item/f"
@@ -191,6 +241,20 @@ func TestCgoGetStatus(t *testing.T) {
 		}
 		if !unlocked {
 			t.Fatal("expected newly created keychain to be unlocked")
+		}
+	})
+
+	t.Run("locked keychain returns unlocked=false", func(t *testing.T) {
+		path := newTempKeychain(t)
+		if out, err := exec.Command("security", "lock-keychain", path).CombinedOutput(); err != nil {
+			t.Fatalf("security lock-keychain: %v: %s", err, out)
+		}
+		unlocked, err := cgoGetStatus(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if unlocked {
+			t.Fatal("expected unlocked=false for locked keychain")
 		}
 	})
 
