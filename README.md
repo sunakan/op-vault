@@ -66,7 +66,7 @@ If the Keychain is locked, macOS prompts for the password before the lookup. The
 
 `op-vault init` prompts for a keychain password.
 
-- **No password** (press Enter): macOS prompts, but pressing Enter unlocks it.
+- **No password** (press Enter): unlocks silently after auto-lock — no prompt.
 - **With password**: macOS prompts and requires the password to unlock.
 
 ## Uninstall
