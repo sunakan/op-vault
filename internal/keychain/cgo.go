@@ -110,6 +110,11 @@ static int kcGet(const char *path, const char *service, const char *account,
 	if (SecKeychainOpen(path, &ref) != noErr || ref == NULL) {
 		return -1;
 	}
+	// Try to unlock with an empty password before querying.
+	// Succeeds silently for no-password keychains — avoids the macOS dialog entirely.
+	// For password-protected keychains this fails; macOS then shows the dialog on
+	// the SecItemCopyMatching call below instead.
+	SecKeychainUnlock(ref, 0, (void *)"", TRUE);
 	CFStringRef svc = CFStringCreateWithCString(NULL, service, kCFStringEncodingUTF8);
 	CFStringRef acc = CFStringCreateWithCString(NULL, account, kCFStringEncodingUTF8);
 	CFArrayRef searchList = CFArrayCreate(NULL, (const void **)&ref, 1, &kCFTypeArrayCallBacks);

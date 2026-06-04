@@ -672,6 +672,49 @@ expect_stdout_contains '___cached-secret___' 'read (cache hit) stdout'
 expect_stderr_empty 'read (cache hit)'
 
 #
+# read (cache hit, after lock, empty password)
+#
+echo ''
+echo '=== read (cache hit, after lock, empty password) ==='
+# Given
+run_cmd reset
+run_cmd_stdin '' init
+expect_exit_code 0 'read after lock: precondition init'
+run_cmd set "op://Test/CachedItem/password" "___cached-secret___"
+expect_exit_code 0 'read after lock: precondition set'
+security lock-keychain "$KEYCHAIN_PATH"
+# When
+run_cmd read "op://Test/CachedItem/password"
+# Then: FAILS before SecKeychainUnlock fix (timeout or macOS dialog hangs)
+expect_exit_code 0 'read (cache hit, after lock, empty password)'
+expect_stdout_contains '___cached-secret___' 'read (cache hit, after lock, empty password) stdout'
+expect_stderr_empty 'read (cache hit, after lock, empty password)'
+
+#
+# read (cache hit, after lock, with password)
+#
+echo ''
+echo '=== read (cache hit, after lock, with password) ==='
+if [ -z "${OP_TEST_INTEGRATION:-}" ]; then
+  _skip 'read (cache hit, after lock, with password): requires manual password input (set OP_TEST_INTEGRATION=1 to run)'
+else
+  # Given
+  security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+  run_cmd_stdin 'testpass' init
+  expect_exit_code 0 'read after lock with password: precondition init'
+  run_cmd set "op://Test/CachedItem/password" "___cached-secret___"
+  expect_exit_code 0 'read after lock with password: precondition set'
+  security lock-keychain "$KEYCHAIN_PATH"
+  # When: macOS shows a password dialog — enter 'testpass'
+  printf '  INFO  keychain password dialog will appear — enter: testpass\n' >&2
+  run_cmd read "op://Test/CachedItem/password"
+  # Then
+  expect_exit_code 0 'read (cache hit, after lock, with password)'
+  expect_stdout_contains '___cached-secret___' 'read (cache hit, after lock, with password) stdout'
+  expect_stderr_empty 'read (cache hit, after lock, with password)'
+fi
+
+#
 # read (cache miss)
 #
 echo ''
