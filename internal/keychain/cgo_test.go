@@ -198,7 +198,7 @@ func TestCgoGet(t *testing.T) {
 			t.Fatalf("cgoAdd: %v", err)
 		}
 
-		if out, err := exec.Command("security", "lock-keychain", path).CombinedOutput(); err != nil {
+		if out, err := exec.Command("security", "lock-keychain", path).CombinedOutput(); err != nil { //nolint:gosec // path is a t.TempDir() value, not user input; SecKeychainLock CGO wrapper is not implemented
 			t.Fatalf("security lock-keychain: %v: %s", err, out)
 		}
 
@@ -246,7 +246,7 @@ func TestCgoGetStatus(t *testing.T) {
 
 	t.Run("locked keychain returns unlocked=false", func(t *testing.T) {
 		path := newTempKeychain(t)
-		if out, err := exec.Command("security", "lock-keychain", path).CombinedOutput(); err != nil {
+		if out, err := exec.Command("security", "lock-keychain", path).CombinedOutput(); err != nil { //nolint:gosec // path is a t.TempDir() value, not user input; SecKeychainLock CGO wrapper is not implemented
 			t.Fatalf("security lock-keychain: %v: %s", err, out)
 		}
 		unlocked, err := cgoGetStatus(path)
