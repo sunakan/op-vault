@@ -281,7 +281,7 @@ expect_exit_code 0 '--help'
 expect_stdout_contains 'op-vault' '--help output is in stdout'
 expect_stderr_empty '--help'
 
-for sub in version init reset read; do
+for sub in version init reset clear read; do
   if printf '%s' "$STDOUT$STDERR" | grep -qF "$sub"; then
     _pass "--help contains '$sub'"
   else
@@ -507,6 +507,95 @@ expect_file_not_exists "$KEYCHAIN_PATH" 'reset removes keychain file'
 sleep 1
 TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
 expect_span_name 'reset' 'reset span received by Jaeger'
+expect_span_name 'main' 'main span received by Jaeger'
+
+#
+# clear --help
+#
+echo ''
+echo '=== clear --help ==='
+run_cmd clear --help
+expect_exit_code 0 'clear --help'
+expect_stdout_contains 'clear' 'clear --help output is in stdout'
+expect_stderr_empty 'clear --help'
+
+#
+# clear (keychain not found)
+#
+echo ''
+echo '=== clear (keychain not found) ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+# When
+run_cmd clear
+# Then
+expect_exit_code 1 'clear (keychain not found)'
+expect_stdout_empty 'clear (keychain not found)'
+expect_stderr_contains "keychain not found: run 'op-vault init'" 'clear (keychain not found)'
+
+#
+# clear (empty keychain)
+#
+echo ''
+echo '=== clear (empty keychain) ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin '' init
+expect_exit_code 0 'clear empty: precondition init'
+# When
+run_cmd clear
+# Then
+expect_exit_code 0 'clear (empty keychain)'
+expect_stdout_empty 'clear (empty keychain)'
+expect_stderr_contains "cleared: $TEST_CHAIN" 'clear empty keychain message'
+expect_file_exists "$KEYCHAIN_PATH" 'clear does not delete keychain file'
+
+#
+# clear (with entries)
+#
+echo ''
+echo '=== clear (with entries) ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin '' init
+expect_exit_code 0 'clear with entries: precondition init'
+run_cmd set "op://Test/Item1/password" "v1"
+expect_exit_code 0 'clear with entries: precondition set item1'
+run_cmd set "op://Test/Item2/password" "v2"
+expect_exit_code 0 'clear with entries: precondition set item2'
+# When
+run_cmd clear
+# Then
+expect_exit_code 0 'clear (with entries)'
+expect_stdout_empty 'clear (with entries)'
+expect_stderr_contains "cleared: $TEST_CHAIN" 'clear with entries message'
+expect_file_exists "$KEYCHAIN_PATH" 'clear does not delete keychain file'
+# verify entries are gone
+run_cmd status
+expect_stdout_contains 'cache: 0 entries' 'clear removed all entries'
+
+#
+# clear with OTLP
+#
+echo ''
+echo '=== clear with OTLP ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin '' init
+expect_exit_code 0 'clear with OTLP: precondition init'
+run_cmd set "op://Test/ClearItem/password" "v"
+expect_exit_code 0 'clear with OTLP: precondition set'
+# When
+START_US=$(($(date +%s) * 1000000))
+run_cmd_otlp clear
+# Then
+expect_exit_code 0 'clear with OTLP'
+expect_stdout_empty 'clear with OTLP'
+expect_stderr_contains "cleared: $TEST_CHAIN" 'clear with OTLP output'
+expect_file_exists "$KEYCHAIN_PATH" 'clear with OTLP does not delete keychain file'
+sleep 1
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
+expect_span_name 'clear' 'clear span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
 #

@@ -345,6 +345,88 @@ func TestCgoCountItems(t *testing.T) {
 	})
 }
 
+func TestCgoClearItems(t *testing.T) {
+	t.Run("empty keychain returns no error", func(t *testing.T) {
+		path := newTempKeychain(t)
+		if err := cgoClearItems(path); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("clears all items", func(t *testing.T) {
+		path := newTempKeychain(t)
+		refs := []string{"op://V/A/f", "op://V/B/f", "op://V/C/f"}
+		for _, ref := range refs {
+			if err := cgoAdd(path, ref, "acct", keychainKind, ref, []byte(`"v"`)); err != nil {
+				t.Fatalf("cgoAdd %s: %v", ref, err)
+			}
+		}
+		if err := cgoClearItems(path); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		n, err := cgoCountItems(path)
+		if err != nil {
+			t.Fatalf("cgoCountItems: %v", err)
+		}
+		if n != 0 {
+			t.Fatalf("got %d items after clear, want 0", n)
+		}
+	})
+
+	t.Run("keychain file still exists after clear", func(t *testing.T) {
+		path := newTempKeychain(t)
+		if err := cgoAdd(path, "op://V/Item/f", "acct", keychainKind, "op://V/Item/f", []byte(`"v"`)); err != nil {
+			t.Fatalf("cgoAdd: %v", err)
+		}
+		if err := cgoClearItems(path); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("keychain file missing after clear: %v", err)
+		}
+	})
+
+	t.Run("nonexistent path returns no error", func(t *testing.T) {
+		// SecKeychainOpen is lazy (always noErr), so SecItemCopyMatching returns
+		// errSecItemNotFound which kcClearItems maps to success rather than an error.
+		// The not-found check is done at the keychain.Clear level via os.Stat.
+		path := filepath.Join(t.TempDir(), "nonexistent.keychain-db")
+		if err := cgoClearItems(path); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("non-cache items are not cleared", func(t *testing.T) {
+		path := newTempKeychain(t)
+		// Add one cache item and one non-cache item.
+		if err := cgoAdd(path, "op://V/Cache/f", "acct", keychainKind, "op://V/Cache/f", []byte(`"v"`)); err != nil {
+			t.Fatalf("cgoAdd cache item: %v", err)
+		}
+		if err := cgoAdd(path, "op://V/Other/f", "acct", "Other", "op://V/Other/f", []byte(`"v"`)); err != nil {
+			t.Fatalf("cgoAdd non-cache item: %v", err)
+		}
+		if err := cgoClearItems(path); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// cgoCountItems only counts cache items, so result should be 0.
+		n, err := cgoCountItems(path)
+		if err != nil {
+			t.Fatalf("cgoCountItems: %v", err)
+		}
+		if n != 0 {
+			t.Fatalf("got %d cache items after clear, want 0", n)
+		}
+		// The non-cache item should still be retrievable.
+		_, found, err := cgoGet(path, "op://V/Other/f", "acct")
+		if err != nil {
+			t.Fatalf("cgoGet non-cache item: %v", err)
+		}
+		if !found {
+			t.Fatal("expected non-cache item to survive clear")
+		}
+	})
+}
+
 func TestCgoGetSettings(t *testing.T) {
 	t.Run("default settings after create", func(t *testing.T) {
 		path := newTempKeychain(t)

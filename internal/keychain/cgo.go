@@ -176,6 +176,62 @@ static int kcGetSettings(const char *path,
 	return 0;
 }
 
+// kcClearItems deletes all "1Password Cache" items from the keychain at path.
+// Uses persistent refs to ensure only items from the target keychain are deleted.
+// Returns 0 on success (including when there are no items), -1 on error (sets *outErr).
+static int kcClearItems(const char *path, OSStatus *outErr) {
+	*outErr = noErr;
+	SecKeychainRef ref = NULL;
+	if (SecKeychainOpen(path, &ref) != noErr || ref == NULL) {
+		*outErr = errSecNoSuchKeychain;
+		return -1;
+	}
+	CFStringRef desc = CFStringCreateWithCString(NULL, "1Password Cache", kCFStringEncodingUTF8);
+	CFArrayRef searchList = CFArrayCreate(NULL, (const void **)&ref, 1, &kCFTypeArrayCallBacks);
+	const void *qkeys[] = {
+		kSecClass, kSecAttrDescription, kSecMatchSearchList, kSecMatchLimit, kSecReturnPersistentRef,
+	};
+	const void *qvals[] = {
+		kSecClassGenericPassword, desc, searchList, kSecMatchLimitAll, kCFBooleanTrue,
+	};
+	CFDictionaryRef query = CFDictionaryCreate(NULL, qkeys, qvals, 5,
+	    &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+	CFTypeRef result = NULL;
+	OSStatus err = SecItemCopyMatching(query, &result);
+	CFRelease(query);
+	CFRelease(searchList);
+	CFRelease(desc);
+	CFRelease(ref);
+	if (err == errSecItemNotFound) {
+		return 0;
+	}
+	if (err != noErr || result == NULL) {
+		*outErr = err;
+		return -1;
+	}
+	CFArrayRef items = (CFArrayRef)result;
+	CFIndex n = CFArrayGetCount(items);
+	OSStatus deleteErr = noErr;
+	for (CFIndex i = 0; i < n; i++) {
+		CFDataRef persistRef = (CFDataRef)CFArrayGetValueAtIndex(items, i);
+		const void *dkeys[] = { kSecValuePersistentRef };
+		const void *dvals[] = { persistRef };
+		CFDictionaryRef dq = CFDictionaryCreate(NULL, dkeys, dvals, 1,
+		    &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+		OSStatus e = SecItemDelete(dq);
+		CFRelease(dq);
+		if (e != noErr && e != errSecItemNotFound) {
+			deleteErr = e;
+		}
+	}
+	CFRelease(result);
+	if (deleteErr != noErr) {
+		*outErr = deleteErr;
+		return -1;
+	}
+	return 0;
+}
+
 // kcAdd adds or updates a generic password in the keychain referenced by kref.
 // On errSecDuplicateItem, falls back to SecItemUpdate to overwrite the value.
 // kSecAttrAccess restricts reads to the current binary only — prevents other processes
@@ -337,6 +393,16 @@ func cgoGetSettings(path string) (keychainSettings, error) {
 		LockOnSleep:  lockOnSleep != 0,
 		LockInterval: uint32(lockInterval),
 	}, nil
+}
+
+func cgoClearItems(path string) error {
+	p := C.CString(path)
+	defer C.free(unsafe.Pointer(p))
+	var outErr C.OSStatus
+	if code := C.kcClearItems(p, &outErr); code != 0 {
+		return fmt.Errorf("SecItemDelete: %s", osStatusString(int(outErr)))
+	}
+	return nil
 }
 
 func cgoAdd(path, service, account, description, label string, data []byte) error {
