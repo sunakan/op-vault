@@ -24,6 +24,18 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
+brews:
+  - repository:
+      owner: sunakan
+      name: homebrew-op-vault
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/sunakan/op-vault"
+    description: "Cache op:// secrets in macOS Keychain"
+    install: |
+      bin.install "op-vault"
+    test: |
+      system "#{bin}/op-vault", "version"
+
 release:
   github:
     owner: sunakan
