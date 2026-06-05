@@ -14,7 +14,9 @@ func Clear(ctx context.Context, path string) error {
 	_, span := tracing.Tracer().Start(ctx, "Clear")
 	defer span.End()
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return &NotFoundError{Path: path}
+		e := &NotFoundError{Path: path}
+		tracing.SetSpanError(span, e)
+		return e
 	}
 	if err := cgoClearItems(path); err != nil {
 		tracing.SetSpanError(span, err)
