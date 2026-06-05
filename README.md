@@ -11,9 +11,16 @@
 
 - macOS
 - [1Password desktop app](https://1password.com/downloads/mac/) with CLI integration enabled
-- Go (for building from source)
 
 ## Installation
+
+### Homebrew (recommended)
+
+```bash
+brew install sunakan/op-vault/op-vault
+```
+
+### Build from source
 
 ```bash
 git clone https://github.com/sunakan/op-vault.git
@@ -72,8 +79,13 @@ If the Keychain is locked, macOS prompts for the password before the lookup. The
 ## Uninstall
 
 ```bash
-op-vault reset           # delete the keychain
-rm ~/.local/bin/op-vault # remove the binary
+op-vault reset             # delete the keychain
+
+# Homebrew
+brew uninstall op-vault
+
+# Build from source
+rm ~/.local/bin/op-vault
 ```
 
 ## License

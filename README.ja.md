@@ -11,9 +11,16 @@
 
 - macOS
 - [1Password デスクトップアプリ](https://1password.com/downloads/mac/)（CLI 連携を有効化）
-- Go（ソースからビルドする場合）
 
 ## インストール
+
+### Homebrew（推奨）
+
+```bash
+brew install sunakan/op-vault/op-vault
+```
+
+### ソースからビルド
 
 ```bash
 git clone https://github.com/sunakan/op-vault.git
@@ -72,8 +79,13 @@ op-vault version           バージョンを表示する
 ## アンインストール
 
 ```bash
-op-vault reset           # キーチェーンを削除
-rm ~/.local/bin/op-vault # バイナリを削除
+op-vault reset             # キーチェーンを削除
+
+# Homebrew
+brew uninstall op-vault
+
+# ソースからビルドした場合
+rm ~/.local/bin/op-vault
 ```
 
 ## ライセンス
