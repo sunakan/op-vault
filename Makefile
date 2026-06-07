@@ -1,6 +1,9 @@
 ################################################################################
 # Main
 ################################################################################
+CLANG_TIDY ?= $(shell brew --prefix llvm 2>/dev/null)/bin/clang-tidy
+CLANG_TIDY_CHECKS ?= -checks=-*,clang-analyzer-*,bugprone-*,-bugprone-easily-swappable-parameters,-bugprone-multi-level-implicit-pointer-conversion
+
 .PHONY: build
 build: ## バイナリビルド
 	@CGO_ENABLED=1 go build -o op-vault ./cmd/op-vault
@@ -62,8 +65,11 @@ c.fmt: ## C言語ファイルをformat
 	@xcrun clang-format -i internal/keychain/keychain_darwin.c internal/keychain/keychain.h
 
 .PHONY: c.lint
-c.lint: ## C言語ファイルをlint(cppcheck)
+c.lint: ## C言語ファイルをlint(cppcheck + clang analyzer + clang-tidy)
 	@cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=staticFunction --suppress=normalCheckLevelMaxBranches --inline-suppr internal/keychain/keychain_darwin.c
+	@xcrun clang --analyze --analyzer-output text -Xanalyzer -analyzer-werror -Iinternal/keychain internal/keychain/keychain_darwin.c
+	@test -x "$(CLANG_TIDY)" || { echo "clang-tidy not found: install Homebrew llvm or set CLANG_TIDY=/path/to/clang-tidy"; exit 1; }
+	@$(CLANG_TIDY) --quiet '$(CLANG_TIDY_CHECKS)' --warnings-as-errors='*' internal/keychain/keychain_darwin.c -- -Iinternal/keychain
 
 ################################################################################
 # Utility-Command help
