@@ -5,7 +5,7 @@
   English | <a href="./README.ja.md">日本語</a>
 </p>
 
-`op read 'op://Vault/Item/password'` is not exactly fast. op-vault caches the result, returning it instantly on subsequent calls.
+`op read 'op://Vault/Item/password'` takes ~1.8s. op-vault caches the result in macOS Keychain and returns it instantly on subsequent calls.
 
 ## Requirements
 
@@ -14,10 +14,18 @@
 
 ## Installation
 
-### Homebrew (recommended)
+### Homebrew
 
 ```bash
 brew install sunakan/op-vault/op-vault
+```
+
+### mise
+
+```toml
+# mise.toml
+[tools]
+"github:sunakan/op-vault" = "0.2.0"
 ```
 
 ### Build from source
@@ -26,66 +34,49 @@ brew install sunakan/op-vault/op-vault
 git clone https://github.com/sunakan/op-vault.git
 cd op-vault
 make build
-mv ./op-vault ~/.local/bin/op-vault  # ensure ~/.local/bin is in your PATH
+mv ./op-vault ~/.local/bin/op-vault
 ```
 
 ## Quick Start
 
 ```bash
-# 1. Initialize the keychain (run once)
-#    You will be prompted for a password (press Enter to skip)
+# Initialize the keychain (run once)
+# Press Enter to skip the password — allows silent auto-unlock after lock
 op-vault init
 
-# 2. Read a secret
+# Read a secret (cache miss fetches from 1Password and caches; cache hit returns immediately)
 OP_ACCOUNT=my-account op-vault read 'op://Personal/GitHub/token'
 ```
 
 ## Subcommands
 
-```
-op-vault init              Initialize the keychain
-op-vault read <ref>        Get a secret from cache or 1Password
-op-vault set <ref> <val>   Manually cache a secret
-op-vault status            Show keychain status and cache entry count
-op-vault reset             Remove the keychain
-op-vault version           Print version
-```
+| Command | Description |
+|---|---|
+| `init` | Initialize the keychain |
+| `read <ref>` | Get a secret from cache or 1Password |
+| `set <ref> <val>` | Manually cache a secret |
+| `refresh` | Re-fetch all cached secrets from 1Password |
+| `list` | List all cached op:// refs with last update time |
+| `clear` | Remove all cached entries (keychain file is kept) |
+| `status` | Show keychain status and cache entry count |
+| `reset` | Remove the keychain |
+| `version` | Print version |
 
-`read` and `set` require a 1Password account via `--account` / `-a` or `OP_ACCOUNT`.
-
-## How It Works
-
-op-vault uses a dedicated Keychain (`~/Library/Keychains/op-vault.keychain-db`) to store secrets.
-
-- **Cache hit**: entry exists — returns immediately.
-- **Cache miss**: entry doesn't exist — fetches from 1Password, caches, and returns.
-
-If the Keychain is locked, macOS prompts for the password before the lookup. The cache expires when the Keychain auto-locks after inactivity.
+`read`, `set`, and `refresh` require a 1Password account via `--account` / `-a` or `OP_ACCOUNT`.  
+`refresh --prune` additionally removes entries that no longer exist in 1Password.
 
 ## Configuration
 
-| Environment Variable | Default | Description |
+| Variable | Default | Description |
 |---|---|---|
-| `OP_ACCOUNT` | (required) | 1Password account email or UUID |
+| `OP_ACCOUNT` | — | 1Password account email or UUID |
 | `OP_VAULT_NAME` | `op-vault` | Keychain name |
-
-## Keychain Password
-
-`op-vault init` prompts for a keychain password.
-
-- **No password** (press Enter): unlocks silently after auto-lock — no prompt.
-- **With password**: macOS prompts and requires the password to unlock.
 
 ## Uninstall
 
 ```bash
-op-vault reset             # delete the keychain
-
-# Homebrew
-brew uninstall op-vault
-
-# Build from source
-rm ~/.local/bin/op-vault
+op-vault reset          # delete the keychain and all cached secrets
+brew uninstall op-vault # remove the binary (Homebrew)
 ```
 
 ## License
