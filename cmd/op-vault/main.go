@@ -27,6 +27,7 @@ type CLI struct {
 	Reset   cli.ResetCmd   `cmd:"" help:"Remove the keychain"`
 	Read    cli.ReadCmd    `cmd:"" help:"Get a secret from cache or 1Password"`
 	List    cli.ListCmd    `cmd:"" help:"List all cached op:// refs"`
+	Refresh cli.RefreshCmd `cmd:"" help:"Re-fetch all cached secrets from 1Password"`
 }
 
 func main() {
