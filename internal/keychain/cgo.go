@@ -352,9 +352,10 @@ static char **kcList(const char *path, char ***outDates, int *outCount, OSStatus
 		} else {
 			// CFAbsoluteTime: seconds since 2001-01-01 UTC; Unix epoch offset = 978307200
 			time_t t = (time_t)(CFDateGetAbsoluteTime(modDate) + 978307200.0);
-			struct tm *tm = localtime(&t);
+			struct tm tm_buf;
+			localtime_r(&t, &tm_buf);
 			char *buf = (char *)malloc(20);
-			strftime(buf, 20, "%Y-%m-%d %H:%M:%S", tm);
+			strftime(buf, 20, "%Y-%m-%d %H:%M:%S", &tm_buf);
 			dates[i] = buf;
 		}
 	}
@@ -436,7 +437,7 @@ func cgoList(path string) ([]ListEntry, error) {
 	var outErr C.OSStatus
 	var outCount C.int
 	var outDates **C.char
-	refs := C.kcList(p, &outDates, &outCount, &outErr)
+	refs := C.kcList(p, &outDates, &outCount, &outErr) //nolint:gocritic // false positive: CGo out-param pattern
 	if outErr != 0 {
 		return nil, fmt.Errorf("kcList: %s", osStatusString(int(outErr)))
 	}

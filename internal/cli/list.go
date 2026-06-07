@@ -34,9 +34,9 @@ func (c *ListCmd) Run(ctx context.Context) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "NAME\tUPDATED AT\n")
+	_, _ = fmt.Fprintf(w, "NAME\tUPDATED AT\n")
 	for _, e := range entries {
-		fmt.Fprintf(w, "%s\t%s\n", e.Ref, e.UpdatedAt)
+		_, _ = fmt.Fprintf(w, "%s\t%s\n", e.Ref, e.UpdatedAt)
 	}
 	return w.Flush()
 }
