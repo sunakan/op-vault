@@ -12,22 +12,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make build       # バイナリビルド（CGO_ENABLED=1 が必要）
 make test        # 単体テスト（go test ./...）
 make e2e-test    # E2E テスト（ビルド → 実バイナリで CLI 動作検証）
-make lint        # golangci-lint + shellcheck（Docker 必須）
-make fmt         # go fmt + golangci-lint fmt（goimports） + shfmt（Docker 必須）
+make lint        # golangci-lint + shellcheck
+make fmt         # go fmt + golangci-lint fmt（goimports） + shfmt
 make clean       # バイナリ削除
 ```
 
 ビルドは darwin 専用（`//go:build darwin`）。`CGO_ENABLED=1` が必須（macOS Keychain API を CGO 経由で呼ぶため）。
 
-`make fmt` / `make lint` の shfmt・shellcheck は Docker コンテナ経由で実行する。Docker が起動していないと失敗する。
+`make fmt` / `make lint` は `mise exec --` 経由で golangci-lint・shfmt・shellcheck を実行する。`mise` が PATH にない場合は失敗する（Go と同様に必須依存）。ツールバージョンは `mise.toml` で管理。
 
 ## Architecture
 
 ```
 cmd/op-vault/main.go   エントリポイント。run() に処理を委譲して os.Exit のみ main で呼ぶ
-internal/cli/             kong サブコマンド実装
-internal/tracing/         OTel 計装（TracerProvider 初期化・Tracer アクセサ・スパンユーティリティ）
-scripts/e2e-test.sh       実バイナリを直接実行する E2E テスト
+internal/cli/          kong サブコマンド実装
+internal/keychain/     macOS Keychain 操作（CGO）
+internal/tracing/      OTel 計装（TracerProvider 初期化・Tracer アクセサ・スパンユーティリティ）
+scripts/e2e-test.sh    実バイナリを直接実行する E2E テスト
 ```
 
 ### CLI フレームワーク
