@@ -27,3 +27,5 @@ OSStatus kcAdd(SecKeychainRef kref, const char *service, const char *account,
 void kcFreeList(char **refs, char **accounts, char **dates, int count);
 char **kcList(const char *path, char ***outAccounts, char ***outDates,
               int *outCount, OSStatus *outErr);
+int kcDeleteItem(const char *path, const char *service, const char *account,
+                 OSStatus *outErr);

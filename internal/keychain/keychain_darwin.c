@@ -436,3 +436,42 @@ char **kcList(const char *path, char ***outAccounts, char ***outDates,
   *outDates = dates;
   return refs;
 }
+
+/* kcDeleteItem deletes a single "1Password Cache" item identified by
+ * service/account from the keychain at path.
+ * Returns 0 on success, -1 on error (sets *outErr). */
+int kcDeleteItem(const char *path, const char *service, const char *account,
+                 OSStatus *outErr) {
+  *outErr = noErr;
+  SecKeychainRef ref = NULL;
+  if (SecKeychainOpen(path, &ref) != noErr || ref == NULL) {
+    *outErr = errSecNoSuchKeychain;
+    return -1;
+  }
+  CFStringRef svc =
+      CFStringCreateWithCString(NULL, service, kCFStringEncodingUTF8);
+  CFStringRef acc =
+      CFStringCreateWithCString(NULL, account, kCFStringEncodingUTF8);
+  CFStringRef desc =
+      CFStringCreateWithCString(NULL, "1Password Cache", kCFStringEncodingUTF8);
+  CFArrayRef searchList =
+      CFArrayCreate(NULL, (const void **)&ref, 1, &kCFTypeArrayCallBacks);
+  const void *keys[] = {kSecClass, kSecAttrService, kSecAttrAccount,
+                        kSecAttrDescription, kSecMatchSearchList};
+  const void *vals[] = {kSecClassGenericPassword, svc, acc, desc, searchList};
+  CFDictionaryRef query =
+      CFDictionaryCreate(NULL, keys, vals, 5, &kCFTypeDictionaryKeyCallBacks,
+                         &kCFTypeDictionaryValueCallBacks);
+  OSStatus err = SecItemDelete(query);
+  CFRelease(query);
+  CFRelease(searchList);
+  CFRelease(desc);
+  CFRelease(acc);
+  CFRelease(svc);
+  CFRelease(ref);
+  if (err != noErr) {
+    *outErr = err;
+    return -1;
+  }
+  return 0;
+}

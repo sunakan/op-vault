@@ -17,7 +17,9 @@ import (
 )
 
 // RefreshCmd implements the refresh subcommand
-type RefreshCmd struct{}
+type RefreshCmd struct {
+	Prune bool `short:"p" help:"Remove entries not found in 1Password from the keychain"`
+}
 
 // Run re-fetches all cached secrets from 1Password and prints results to stdout.
 // OP_ACCOUNT is not required — account is read from each keychain entry.
@@ -48,7 +50,15 @@ func (c *RefreshCmd) Run(ctx context.Context) error {
 		if resolveErr != nil {
 			status := "error"
 			if strings.Contains(resolveErr.Error(), "not found in 1Password") {
-				status = "not found"
+				if c.Prune {
+					if delErr := keychain.DeleteItem(ctx, e.Account, e.Ref); delErr != nil {
+						status = "error"
+					} else {
+						status = "removed"
+					}
+				} else {
+					status = "not found"
+				}
 			}
 			rows = append(rows, row{ref: e.Ref, status: status, updatedAt: "-"})
 			continue

@@ -173,3 +173,17 @@ func cgoAdd(path, service, account, description, label string, data []byte) erro
 	}
 	return nil
 }
+
+func cgoDeleteItem(path, service, account string) error {
+	p := C.CString(path)
+	defer C.free(unsafe.Pointer(p))
+	s := C.CString(service)
+	defer C.free(unsafe.Pointer(s))
+	a := C.CString(account)
+	defer C.free(unsafe.Pointer(a))
+	var outErr C.OSStatus
+	if code := C.kcDeleteItem(p, s, a, &outErr); code != 0 {
+		return fmt.Errorf("SecItemDelete: %s (service=%s)", osStatusString(int(outErr)), service)
+	}
+	return nil
+}
