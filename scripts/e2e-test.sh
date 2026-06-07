@@ -45,8 +45,8 @@ cleanup() {
 }
 
 start_jaeger() {
-  if command -v jaeger >/dev/null 2>&1; then
-    jaeger >/dev/null 2>&1 &
+  if mise exec -- jaeger --version >/dev/null 2>&1; then
+    mise exec -- jaeger >/dev/null 2>&1 &
     JAEGER_PID=$!
   else
     USE_DOCKER_JAEGER=true
