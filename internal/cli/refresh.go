@@ -65,7 +65,7 @@ func (c *RefreshCmd) Run(ctx context.Context) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintf(w, "NAME\tREFRESHED\tUPDATED AT\n")
+	_, _ = fmt.Fprintf(w, "NAME\tSTATUS\tUPDATED AT\n")
 	for _, r := range rows {
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", r.ref, r.status, r.updatedAt)
 	}
