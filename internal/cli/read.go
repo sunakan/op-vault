@@ -59,13 +59,11 @@ func (c *ReadCmd) Run(ctx context.Context) error {
 		return nil
 	}
 
+	tracing.SetSpanError(span, err)
 	var notFound *keychain.NotFoundError
 	if errors.As(err, &notFound) {
-		tracing.SetSpanError(span, err)
 		return errors.New("keychain not found: run 'op-vault init'")
 	}
-
-	tracing.SetSpanError(span, err)
 	return err
 }
 
