@@ -297,7 +297,7 @@ expect_exit_code 0 '--help'
 expect_stdout_contains 'op-vault' '--help output is in stdout'
 expect_stderr_empty '--help'
 
-for sub in version init reset clear read; do
+for sub in version init reset clear read list; do
   if printf '%s' "$STDOUT$STDERR" | grep -qF "$sub"; then
     _pass "--help contains '$sub'"
   else
@@ -898,6 +898,67 @@ sleep 1
 TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
 expect_span_name 'read' 'read span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
+
+#
+# list --help
+#
+echo ''
+echo '=== list --help ==='
+run_cmd list --help
+expect_exit_code 0 'list --help'
+expect_stdout_contains 'list' 'list --help output is in stdout'
+expect_stderr_empty 'list --help'
+
+#
+# list (keychain not found)
+#
+echo ''
+echo '=== list (keychain not found) ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+# When
+run_cmd list
+# Then
+expect_exit_code 1 'list (keychain not found)'
+expect_stdout_empty 'list (keychain not found)'
+expect_stderr_contains "keychain not found: run 'op-vault init'" 'list (keychain not found)'
+
+#
+# list (empty keychain)
+#
+echo ''
+echo '=== list (empty keychain) ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin '' init
+expect_exit_code 0 'list empty: precondition init'
+# When
+run_cmd list
+# Then
+expect_exit_code 0 'list (empty keychain)'
+expect_stdout_contains 'NAME' 'list (empty keychain) has header'
+expect_stderr_empty 'list (empty keychain)'
+
+#
+# list (with entries)
+#
+echo ''
+echo '=== list (with entries) ==='
+# Given
+run_cmd set "op://Test/Item1/password" "v1"
+expect_exit_code 0 'list with entries: precondition set item1'
+run_cmd set "op://Test/Item2/password" "v2"
+expect_exit_code 0 'list with entries: precondition set item2'
+# When
+run_cmd list
+# Then
+expect_exit_code 0 'list (with entries)'
+expect_stdout_contains 'NAME' 'list has NAME header'
+expect_stdout_contains 'UPDATED AT' 'list has UPDATED AT header'
+expect_stdout_contains 'op://Test/Item1/password' 'list contains item1'
+expect_stdout_contains 'op://Test/Item2/password' 'list contains item2'
+expect_stdout_matches '[0-9]{4}-[0-9]{2}-[0-9]{2}' 'list contains date'
+expect_stderr_empty 'list (with entries)'
 
 #
 # status --help
