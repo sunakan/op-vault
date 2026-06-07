@@ -9,9 +9,10 @@ import (
 	"github.com/sunakan/op-vault/internal/tracing"
 )
 
-// ListEntry holds a cached ref and its last update time.
+// ListEntry holds a cached ref, the account it was stored under, and its last update time.
 type ListEntry struct {
 	Ref       string
+	Account   string
 	UpdatedAt string // "YYYY-MM-DD HH:MM:SS" local time, or "" if unavailable
 }
 

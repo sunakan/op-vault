@@ -24,6 +24,6 @@ int kcClearItems(const char *path, OSStatus *outErr);
 OSStatus kcAdd(SecKeychainRef kref, const char *service, const char *account,
                const char *description, const char *label, const void *data,
                int dataLen);
-void kcFreeList(char **refs, char **dates, int count);
-char **kcList(const char *path, char ***outDates, int *outCount,
-              OSStatus *outErr);
+void kcFreeList(char **refs, char **accounts, char **dates, int count);
+char **kcList(const char *path, char ***outAccounts, char ***outDates,
+              int *outCount, OSStatus *outErr);

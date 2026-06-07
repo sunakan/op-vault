@@ -304,24 +304,28 @@ OSStatus kcAdd(SecKeychainRef kref, const char *service, const char *account,
   return err;
 }
 
-/* kcFreeList frees parallel ref/date arrays returned by kcList. */
-void kcFreeList(char **refs, char **dates, int count) {
+/* kcFreeList frees parallel ref/account/date arrays returned by kcList. */
+void kcFreeList(char **refs, char **accounts, char **dates, int count) {
   for (int i = 0; i < count; i++) {
     free(refs[i]);
+    free(accounts[i]);
     free(dates[i]);
   }
   free(refs);
+  free(accounts);
   free(dates);
 }
 
-/* kcList returns two parallel malloc'd char** arrays (refs and dates) of length
- * *outCount, or NULL on empty/error. dates[i] is "YYYY-MM-DD HH:MM:SS" (local
- * time) from kSecAttrModificationDate, or "" if absent. Caller must call
- * kcFreeList. */
-char **kcList(const char *path, char ***outDates, int *outCount,
-              OSStatus *outErr) {
+/* kcList returns refs as the return value and writes accounts/dates as
+ * out-params. All three are parallel malloc'd char** arrays of length
+ * *outCount. dates[i] is "YYYY-MM-DD HH:MM:SS" (local time) from
+ * kSecAttrModificationDate, or "" if absent. Returns NULL on empty/error.
+ * Caller must call kcFreeList. */
+char **kcList(const char *path, char ***outAccounts, char ***outDates,
+              int *outCount, OSStatus *outErr) {
   *outErr = noErr;
   *outCount = 0;
+  *outAccounts = NULL;
   *outDates = NULL;
   SecKeychainRef ref = NULL;
   if (SecKeychainOpen(path, &ref) != noErr || ref == NULL)
@@ -352,19 +356,23 @@ char **kcList(const char *path, char ***outDates, int *outCount,
   CFArrayRef arr = (CFArrayRef)result;
   int count = (int)CFArrayGetCount(arr);
   char **refs = (char **)malloc((size_t)count * sizeof(char *));
+  char **accounts = (char **)malloc((size_t)count * sizeof(char *));
   char **dates = (char **)malloc((size_t)count * sizeof(char *));
-  if (refs == NULL || dates == NULL) {
+  if (refs == NULL || accounts == NULL || dates == NULL) {
     free(refs);
+    free(accounts);
     free(dates);
     CFRelease(result);
     return NULL;
   }
   for (int i = 0; i < count; i++) {
     refs[i] = NULL;
+    accounts[i] = NULL;
     dates[i] = NULL;
   }
   for (int i = 0; i < count; i++) {
     CFDictionaryRef item = (CFDictionaryRef)CFArrayGetValueAtIndex(arr, i);
+
     CFStringRef svc = (CFStringRef)CFDictionaryGetValue(item, kSecAttrService);
     if (svc == NULL) {
       refs[i] = strdup("");
@@ -378,10 +386,29 @@ char **kcList(const char *path, char ***outDates, int *outCount,
       refs[i] = (buf != NULL) ? buf : strdup("");
     }
     if (refs[i] == NULL) {
-      kcFreeList(refs, dates, i);
+      kcFreeList(refs, accounts, dates, i);
       CFRelease(result);
       return NULL;
     }
+
+    CFStringRef acc = (CFStringRef)CFDictionaryGetValue(item, kSecAttrAccount);
+    if (acc == NULL) {
+      accounts[i] = strdup("");
+    } else {
+      CFIndex len = CFStringGetMaximumSizeForEncoding(CFStringGetLength(acc),
+                                                      kCFStringEncodingUTF8) +
+                    1;
+      char *buf = (char *)malloc((size_t)len);
+      if (buf != NULL)
+        CFStringGetCString(acc, buf, len, kCFStringEncodingUTF8);
+      accounts[i] = (buf != NULL) ? buf : strdup("");
+    }
+    if (accounts[i] == NULL) {
+      kcFreeList(refs, accounts, dates, i + 1);
+      CFRelease(result);
+      return NULL;
+    }
+
     CFDateRef modDate =
         (CFDateRef)CFDictionaryGetValue(item, kSecAttrModificationDate);
     if (modDate == NULL) {
@@ -398,13 +425,14 @@ char **kcList(const char *path, char ***outDates, int *outCount,
       dates[i] = (buf != NULL) ? buf : strdup("");
     }
     if (dates[i] == NULL) {
-      kcFreeList(refs, dates, i + 1);
+      kcFreeList(refs, accounts, dates, i + 1);
       CFRelease(result);
       return NULL;
     }
   }
   CFRelease(result);
   *outCount = count;
+  *outAccounts = accounts;
   *outDates = dates;
   return refs;
 }

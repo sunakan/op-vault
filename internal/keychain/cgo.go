@@ -69,22 +69,25 @@ func cgoList(path string) ([]ListEntry, error) {
 	defer C.free(unsafe.Pointer(p))
 	var outErr C.OSStatus
 	var outCount C.int
+	var outAccounts **C.char
 	var outDates **C.char
-	refs := C.kcList(p, &outDates, &outCount, &outErr) //nolint:gocritic // false positive: CGo out-param pattern
+	refs := C.kcList(p, &outAccounts, &outDates, &outCount, &outErr) //nolint:gocritic // false positive: CGo out-param pattern
 	if outErr != 0 {
 		return nil, fmt.Errorf("kcList: %s", osStatusString(int(outErr)))
 	}
 	if refs == nil || outCount == 0 {
 		return nil, nil
 	}
-	defer C.kcFreeList(refs, outDates, outCount)
+	defer C.kcFreeList(refs, outAccounts, outDates, outCount)
 	count := int(outCount)
 	refSlice := (*[1 << 20]*C.char)(unsafe.Pointer(refs))[:count:count]
+	accountSlice := (*[1 << 20]*C.char)(unsafe.Pointer(outAccounts))[:count:count]
 	dateSlice := (*[1 << 20]*C.char)(unsafe.Pointer(outDates))[:count:count]
 	entries := make([]ListEntry, count)
 	for i := range entries {
 		entries[i] = ListEntry{
 			Ref:       C.GoString(refSlice[i]),
+			Account:   C.GoString(accountSlice[i]),
 			UpdatedAt: C.GoString(dateSlice[i]),
 		}
 	}

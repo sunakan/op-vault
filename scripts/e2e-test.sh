@@ -297,7 +297,7 @@ expect_exit_code 0 '--help'
 expect_stdout_contains 'op-vault' '--help output is in stdout'
 expect_stderr_empty '--help'
 
-for sub in version init reset clear read list; do
+for sub in version init reset clear read list refresh; do
   if printf '%s' "$STDOUT$STDERR" | grep -qF "$sub"; then
     _pass "--help contains '$sub'"
   else
@@ -959,6 +959,128 @@ expect_stdout_contains 'op://Test/Item1/password' 'list contains item1'
 expect_stdout_contains 'op://Test/Item2/password' 'list contains item2'
 expect_stdout_matches '[0-9]{4}-[0-9]{2}-[0-9]{2}' 'list contains date'
 expect_stderr_empty 'list (with entries)'
+
+#
+# refresh --help
+#
+echo ''
+echo '=== refresh --help ==='
+run_cmd refresh --help
+expect_exit_code 0 'refresh --help'
+expect_stdout_contains 'refresh' 'refresh --help output is in stdout'
+expect_stderr_empty 'refresh --help'
+
+#
+# refresh (keychain not found)
+#
+echo ''
+echo '=== refresh (keychain not found) ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+# When
+run_cmd_no_account refresh
+# Then
+expect_exit_code 1 'refresh (keychain not found)'
+expect_stdout_empty 'refresh (keychain not found)'
+expect_stderr_contains "keychain not found: run 'op-vault init'" 'refresh (keychain not found)'
+
+#
+# refresh (empty keychain)
+#
+echo ''
+echo '=== refresh (empty keychain) ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin '' init
+expect_exit_code 0 'refresh empty: precondition init'
+# When: no OP_ACCOUNT needed when there are no entries to refresh
+run_cmd_no_account refresh
+# Then
+expect_exit_code 0 'refresh (empty keychain)'
+expect_stdout_contains 'NAME' 'refresh (empty keychain) has NAME header'
+expect_stdout_contains 'REFRESHED' 'refresh (empty keychain) has REFRESHED header'
+expect_stdout_contains 'UPDATED AT' 'refresh (empty keychain) has UPDATED AT header'
+expect_stderr_empty 'refresh (empty keychain)'
+
+#
+# refresh (integration: success)
+#
+echo ''
+echo '=== refresh (integration: success) ==='
+if [ -z "${OP_TEST_INTEGRATION:-}" ]; then
+  _skip 'refresh success: requires 1Password (set OP_TEST_INTEGRATION=1 to run)'
+else
+  # Requires 1Password item: op://Test/ExistedItem/password = "___existed-secret___"
+  # Given
+  run_cmd reset
+  run_cmd_stdin '' init
+  expect_exit_code 0 'refresh success: precondition init'
+  run_cmd set "op://Test/ExistedItem/password" "___stale-value___"
+  expect_exit_code 0 'refresh success: precondition set stale value'
+  run_cmd read "op://Test/ExistedItem/password"
+  expect_stdout_contains '___stale-value___' 'refresh success: stale value is cached'
+  # When: no OP_ACCOUNT — account comes from keychain entry
+  run_cmd_no_account refresh
+  # Then
+  expect_exit_code 0 'refresh (success)'
+  expect_stdout_contains 'NAME' 'refresh has NAME header'
+  expect_stdout_contains 'REFRESHED' 'refresh has REFRESHED header'
+  expect_stdout_contains 'UPDATED AT' 'refresh has UPDATED AT header'
+  expect_stdout_contains 'op://Test/ExistedItem/password' 'refresh shows ref'
+  expect_stdout_contains 'refreshed' 'refresh shows refreshed status'
+  expect_stderr_empty 'refresh (success)'
+  # verify the cached value is updated to the real 1Password value
+  run_cmd read "op://Test/ExistedItem/password"
+  expect_exit_code 0 'refresh: verify read after refresh'
+  expect_stdout_contains '___existed-secret___' 'refresh: value updated from 1Password'
+fi
+
+#
+# refresh (integration: not found in 1Password)
+#
+echo ''
+echo '=== refresh (integration: not found in 1Password) ==='
+if [ -z "${OP_TEST_INTEGRATION:-}" ]; then
+  _skip 'refresh not found: requires 1Password (set OP_TEST_INTEGRATION=1 to run)'
+else
+  # Requires op://Test/NotFound/password to NOT exist in 1Password
+  # Given
+  run_cmd reset
+  run_cmd_stdin '' init
+  expect_exit_code 0 'refresh not found: precondition init'
+  run_cmd set "op://Test/NotFound/password" "___stale___"
+  expect_exit_code 0 'refresh not found: precondition set stale value'
+  # When
+  run_cmd_no_account refresh
+  # Then: exit 0 even when item is missing from 1Password — result shown in table
+  expect_exit_code 0 'refresh (not found in 1Password)'
+  expect_stdout_contains 'op://Test/NotFound/password' 'refresh not found shows ref'
+  expect_stdout_contains 'not found' 'refresh not found shows not found status'
+  expect_stderr_empty 'refresh (not found in 1Password)'
+fi
+
+#
+# refresh with OTLP
+#
+echo ''
+echo '=== refresh with OTLP ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin '' init
+expect_exit_code 0 'refresh with OTLP: precondition init'
+run_cmd set "op://Test/RefreshItem/password" "v"
+expect_exit_code 0 'refresh with OTLP: precondition set'
+# When: 1Password lookup returns not found (dummy account) but exit 0
+START_US=$(($(date +%s) * 1000000))
+run_cmd_otlp refresh
+# Then
+expect_exit_code 0 'refresh with OTLP'
+expect_stdout_contains 'NAME' 'refresh with OTLP has NAME header'
+expect_stderr_empty 'refresh with OTLP'
+sleep 1
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
+expect_span_name 'refresh' 'refresh span received by Jaeger'
+expect_span_name 'main' 'main span received by Jaeger'
 
 #
 # status --help
