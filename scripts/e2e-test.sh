@@ -998,7 +998,7 @@ run_cmd_no_account refresh
 # Then
 expect_exit_code 0 'refresh (empty keychain)'
 expect_stdout_contains 'NAME' 'refresh (empty keychain) has NAME header'
-expect_stdout_contains 'REFRESHED' 'refresh (empty keychain) has REFRESHED header'
+expect_stdout_contains 'STATUS' 'refresh (empty keychain) has STATUS header'
 expect_stdout_contains 'UPDATED AT' 'refresh (empty keychain) has UPDATED AT header'
 expect_stderr_empty 'refresh (empty keychain)'
 
@@ -1024,7 +1024,7 @@ else
   # Then
   expect_exit_code 0 'refresh (success)'
   expect_stdout_contains 'NAME' 'refresh has NAME header'
-  expect_stdout_contains 'REFRESHED' 'refresh has REFRESHED header'
+  expect_stdout_contains 'STATUS' 'refresh has STATUS header'
   expect_stdout_contains 'UPDATED AT' 'refresh has UPDATED AT header'
   expect_stdout_contains 'op://Test/ExistedItem/password' 'refresh shows ref'
   expect_stdout_contains 'refreshed' 'refresh shows refreshed status'
