@@ -38,6 +38,7 @@ fmt: ## go fmt
 	@go fmt ./cmd/... ./internal/...
 	@mise exec -- golangci-lint fmt
 	@$(MAKE) sh.fmt
+	@$(MAKE) c.fmt
 
 .PHONY: lint
 lint: ## lint
@@ -55,6 +56,10 @@ sh.fmt: ## scripts/以下をformat
 .PHONY: sh.lint
 sh.lint: ## scripts/以下をlint
 	@mise exec -- shellcheck scripts/*.sh
+
+.PHONY: c.fmt
+c.fmt: ## C言語ファイルをformat
+	@xcrun clang-format -i internal/keychain/keychain_darwin.c internal/keychain/keychain.h
 
 .PHONY: c.lint
 c.lint: ## C言語ファイルをlint(cppcheck)
