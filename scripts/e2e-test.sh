@@ -209,6 +209,14 @@ expect_span_name() {
   fi
 }
 
+expect_stdout_not_contains() {
+  if printf '%s' "$STDOUT" | grep -qF "$1"; then
+    _fail "stdout contains '$1' (expected absent)  $2  (actual: $(printf '%s' "$STDOUT" | grep -F "$1" | head -1))"
+  else
+    _pass "stdout does not contain '$1'  $2"
+  fi
+}
+
 expect_file_exists() {
   if [ -f "$1" ]; then
     _pass "file exists '$1'  $2"
@@ -1081,6 +1089,117 @@ sleep 1
 TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
 expect_span_name 'refresh' 'refresh span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
+
+#
+# refresh --help shows --prune flag
+#
+echo ''
+echo '=== refresh --help (--prune flag) ==='
+run_cmd refresh --help
+expect_exit_code 0 'refresh --help (--prune)'
+expect_stdout_contains 'prune' 'refresh --help shows --prune flag'
+expect_stderr_empty 'refresh --help (--prune)'
+
+#
+# refresh --prune (empty keychain)
+#
+echo ''
+echo '=== refresh --prune (empty keychain) ==='
+# Given
+security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+run_cmd_stdin '' init
+expect_exit_code 0 'refresh --prune empty: precondition init'
+# When
+run_cmd_no_account refresh --prune
+# Then
+expect_exit_code 0 'refresh --prune (empty keychain)'
+expect_stdout_contains 'NAME' 'refresh --prune (empty keychain) has NAME header'
+expect_stderr_empty 'refresh --prune (empty keychain)'
+
+#
+# refresh --prune (error does not prune)
+#
+echo ''
+echo '=== refresh --prune (error does not prune) ==='
+if [ -n "${OP_TEST_INTEGRATION:-}" ]; then
+  # In integration mode the real account works, so op.Resolve returns "not found in
+  # 1Password" for this ref — prune would fire, defeating the purpose of this test.
+  _skip 'refresh --prune error: skipped in integration mode (tests dummy-account path only)'
+else
+  # Given: dummy account causes op.Resolve to fail with auth error, not "not found"
+  security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+  run_cmd_stdin '' init
+  expect_exit_code 0 'refresh --prune error: precondition init'
+  run_cmd set "op://Test/Item/password" "___cached___"
+  expect_exit_code 0 'refresh --prune error: precondition set'
+  # When: dummy account → resolve fails with "error", not "not found"
+  run_cmd_no_account refresh --prune
+  # Then: entry must remain — prune only fires on "not found", not on auth/other errors
+  expect_exit_code 0 'refresh --prune (error does not prune)'
+  expect_stdout_contains 'error' 'refresh --prune shows error status'
+  expect_stderr_empty 'refresh --prune (error does not prune)'
+  run_cmd list
+  expect_stdout_contains 'op://Test/Item/password' 'refresh --prune (error): entry remains in keychain'
+fi
+
+#
+# refresh --prune (integration: not found → removed)
+#
+echo ''
+echo '=== refresh --prune (integration: not found → removed) ==='
+if [ -z "${OP_TEST_INTEGRATION:-}" ]; then
+  _skip 'refresh --prune not found: requires 1Password (set OP_TEST_INTEGRATION=1 to run)'
+else
+  # Requires op://Test/NotFound/password to NOT exist in 1Password
+  # Given
+  run_cmd reset
+  run_cmd_stdin '' init
+  expect_exit_code 0 'refresh --prune not found: precondition init'
+  run_cmd set "op://Test/NotFound/password" "___stale___"
+  expect_exit_code 0 'refresh --prune not found: precondition set stale value'
+  run_cmd list
+  expect_stdout_contains 'op://Test/NotFound/password' 'refresh --prune not found: entry exists before prune'
+  # When
+  run_cmd_no_account refresh --prune
+  # Then
+  expect_exit_code 0 'refresh --prune (not found → removed)'
+  expect_stdout_contains 'op://Test/NotFound/password' 'refresh --prune shows ref'
+  expect_stdout_contains 'removed' 'refresh --prune shows removed status'
+  expect_stderr_empty 'refresh --prune (not found → removed)'
+  # verify entry is gone from keychain
+  run_cmd list
+  expect_stdout_not_contains 'op://Test/NotFound/password' 'refresh --prune: removed entry is gone from list'
+fi
+
+#
+# refresh --prune (integration: mixed — refreshed stays, not found removed)
+#
+echo ''
+echo '=== refresh --prune (integration: mixed) ==='
+if [ -z "${OP_TEST_INTEGRATION:-}" ]; then
+  _skip 'refresh --prune mixed: requires 1Password (set OP_TEST_INTEGRATION=1 to run)'
+else
+  # Requires: op://Test/ExistedItem/password exists, op://Test/NotFound/password does NOT
+  # Given
+  run_cmd reset
+  run_cmd_stdin '' init
+  expect_exit_code 0 'refresh --prune mixed: precondition init'
+  run_cmd set "op://Test/ExistedItem/password" "___stale___"
+  expect_exit_code 0 'refresh --prune mixed: precondition set existed item'
+  run_cmd set "op://Test/NotFound/password" "___stale___"
+  expect_exit_code 0 'refresh --prune mixed: precondition set not-found item'
+  # When
+  run_cmd_no_account refresh --prune
+  # Then
+  expect_exit_code 0 'refresh --prune (mixed)'
+  expect_stdout_contains 'refreshed' 'refresh --prune: existed item shows refreshed'
+  expect_stdout_contains 'removed' 'refresh --prune: not-found item shows removed'
+  expect_stderr_empty 'refresh --prune (mixed)'
+  # verify existed item is still in keychain
+  run_cmd list
+  expect_stdout_contains 'op://Test/ExistedItem/password' 'refresh --prune: refreshed entry remains in list'
+  expect_stdout_not_contains 'op://Test/NotFound/password' 'refresh --prune: removed entry is gone from list'
+fi
 
 #
 # status --help
