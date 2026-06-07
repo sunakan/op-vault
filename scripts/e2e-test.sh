@@ -26,6 +26,8 @@ TRACES=''
 STDOUT_TMP=$(mktemp)
 STDERR_TMP=$(mktemp)
 CMD_TIMEOUT_SEC=10
+JAEGER_PID=''
+USE_DOCKER_JAEGER=false
 
 #
 # Helper
@@ -35,7 +37,22 @@ CMD_TIMEOUT_SEC=10
 cleanup() {
   security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
   rm -f "$STDOUT_TMP" "$STDERR_TMP"
-  make down 2>/dev/null &
+  if $USE_DOCKER_JAEGER; then
+    make down 2>/dev/null &
+  elif [ -n "$JAEGER_PID" ]; then
+    kill "$JAEGER_PID" 2>/dev/null || true
+  fi
+}
+
+start_jaeger() {
+  if command -v jaeger >/dev/null 2>&1; then
+    jaeger >/dev/null 2>&1 &
+    JAEGER_PID=$!
+  else
+    USE_DOCKER_JAEGER=true
+    make down 2>/dev/null || true
+    make up 2>/dev/null || return 1
+  fi
 }
 trap cleanup EXIT
 
@@ -239,8 +256,7 @@ fi
 echo ''
 echo '=== Jaeger ==='
 
-make down 2>/dev/null || true
-if make up 2>/dev/null; then
+if start_jaeger; then
   wait_for_jaeger
   _pass 'Jaeger started'
 else
