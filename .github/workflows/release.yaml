@@ -10,6 +10,7 @@ permissions: {}
 jobs:
   release:
     runs-on: macos-latest
+    timeout-minutes: 5
     permissions:
       contents: write
     steps:
