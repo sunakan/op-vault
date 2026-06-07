@@ -9,6 +9,7 @@ package keychain
 #include <CoreFoundation/CoreFoundation.h>
 #include <Security/Security.h>
 #include <stdlib.h>
+#include <time.h>
 
 // SecKeychainCopySettings: present in Security.framework binary (verified via .tbd)
 // but absent from public SDK headers — forward-declare to call it directly.
@@ -296,6 +297,81 @@ static OSStatus kcAdd(SecKeychainRef kref,
 	return err;
 }
 
+// kcList returns two parallel malloc'd char** arrays (refs and dates) of length *outCount,
+// or NULL on empty/error. dates[i] is "YYYY-MM-DD HH:MM:SS" (local time) from
+// kSecAttrModificationDate, or "" if absent. Caller must call kcFreeList.
+static char **kcList(const char *path, char ***outDates, int *outCount, OSStatus *outErr) {
+	*outErr = noErr;
+	*outCount = 0;
+	*outDates = NULL;
+	SecKeychainRef ref = NULL;
+	if (SecKeychainOpen(path, &ref) != noErr || ref == NULL) {
+		return NULL;
+	}
+	CFStringRef desc = CFStringCreateWithCString(NULL, "1Password Cache", kCFStringEncodingUTF8);
+	CFArrayRef searchList = CFArrayCreate(NULL, (const void **)&ref, 1, &kCFTypeArrayCallBacks);
+	const void *keys[] = {
+		kSecClass, kSecAttrDescription, kSecMatchSearchList, kSecMatchLimit, kSecReturnAttributes,
+	};
+	const void *vals[] = {
+		kSecClassGenericPassword, desc, searchList, kSecMatchLimitAll, kCFBooleanTrue,
+	};
+	CFDictionaryRef query = CFDictionaryCreate(NULL, keys, vals, 5,
+	    &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+	CFTypeRef result = NULL;
+	OSStatus err = SecItemCopyMatching(query, &result);
+	CFRelease(query);
+	CFRelease(searchList);
+	CFRelease(desc);
+	CFRelease(ref);
+	if (err == errSecItemNotFound || result == NULL) {
+		return NULL;
+	}
+	if (err != noErr) {
+		*outErr = err;
+		return NULL;
+	}
+	CFArrayRef arr = (CFArrayRef)result;
+	int count = (int)CFArrayGetCount(arr);
+	char **refs  = (char **)malloc((size_t)count * sizeof(char *));
+	char **dates = (char **)malloc((size_t)count * sizeof(char *));
+	for (int i = 0; i < count; i++) {
+		CFDictionaryRef item = (CFDictionaryRef)CFArrayGetValueAtIndex(arr, i);
+		CFStringRef svc = (CFStringRef)CFDictionaryGetValue(item, kSecAttrService);
+		if (svc == NULL) {
+			refs[i] = strdup("");
+		} else {
+			CFIndex len = CFStringGetMaximumSizeForEncoding(CFStringGetLength(svc), kCFStringEncodingUTF8) + 1;
+			char *buf = (char *)malloc((size_t)len);
+			CFStringGetCString(svc, buf, len, kCFStringEncodingUTF8);
+			refs[i] = buf;
+		}
+		CFDateRef modDate = (CFDateRef)CFDictionaryGetValue(item, kSecAttrModificationDate);
+		if (modDate == NULL) {
+			dates[i] = strdup("");
+		} else {
+			// CFAbsoluteTime: seconds since 2001-01-01 UTC; Unix epoch offset = 978307200
+			time_t t = (time_t)(CFDateGetAbsoluteTime(modDate) + 978307200.0);
+			struct tm *tm = localtime(&t);
+			char *buf = (char *)malloc(20);
+			strftime(buf, 20, "%Y-%m-%d %H:%M:%S", tm);
+			dates[i] = buf;
+		}
+	}
+	CFRelease(result);
+	*outCount = count;
+	*outDates = dates;
+	return refs;
+}
+
+static void kcFreeList(char **refs, char **dates, int count) {
+	for (int i = 0; i < count; i++) {
+		free(refs[i]);
+		free(dates[i]);
+	}
+	free(refs);
+	free(dates);
+}
 
 */
 import "C" //nolint:gocritic // CGO requires import "C" as its own statement immediately after the C comment block
@@ -352,6 +428,33 @@ func cgoCountItems(path string) (int, error) {
 		return 0, fmt.Errorf("SecItemCopyMatching: %s", osStatusString(int(outErr)))
 	}
 	return int(code), nil
+}
+
+func cgoList(path string) ([]ListEntry, error) {
+	p := C.CString(path)
+	defer C.free(unsafe.Pointer(p))
+	var outErr C.OSStatus
+	var outCount C.int
+	var outDates **C.char
+	refs := C.kcList(p, &outDates, &outCount, &outErr)
+	if outErr != 0 {
+		return nil, fmt.Errorf("kcList: %s", osStatusString(int(outErr)))
+	}
+	if refs == nil || outCount == 0 {
+		return nil, nil
+	}
+	defer C.kcFreeList(refs, outDates, outCount)
+	count := int(outCount)
+	refSlice := (*[1 << 20]*C.char)(unsafe.Pointer(refs))[:count:count]
+	dateSlice := (*[1 << 20]*C.char)(unsafe.Pointer(outDates))[:count:count]
+	entries := make([]ListEntry, count)
+	for i := range entries {
+		entries[i] = ListEntry{
+			Ref:       C.GoString(refSlice[i]),
+			UpdatedAt: C.GoString(dateSlice[i]),
+		}
+	}
+	return entries, nil
 }
 
 func cgoCreate(path, password string) error {
