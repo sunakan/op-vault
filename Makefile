@@ -43,6 +43,7 @@ fmt: ## go fmt
 lint: ## lint
 	@mise exec -- golangci-lint run
 	@$(MAKE) sh.lint
+	@$(MAKE) c.lint
 
 ################################################################################
 # Tool
@@ -54,6 +55,10 @@ sh.fmt: ## scripts/以下をformat
 .PHONY: sh.lint
 sh.lint: ## scripts/以下をlint
 	@mise exec -- shellcheck scripts/*.sh
+
+.PHONY: c.lint
+c.lint: ## C言語ファイルをlint(cppcheck)
+	@cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=staticFunction --suppress=normalCheckLevelMaxBranches --inline-suppr internal/keychain/keychain_darwin.c
 
 ################################################################################
 # Utility-Command help
