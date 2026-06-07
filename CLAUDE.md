@@ -9,17 +9,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-make build       # バイナリビルド（CGO_ENABLED=1 が必要）
-make test        # 単体テスト（go test ./...）
-make e2e-test    # E2E テスト（ビルド → 実バイナリで CLI 動作検証）
-make lint        # golangci-lint + shellcheck
-make fmt         # go fmt + golangci-lint fmt（goimports） + shfmt
-make clean       # バイナリ削除
+make build                  # バイナリビルド（CGO_ENABLED=1 が必要）
+make test                   # 単体テスト（go test ./...）
+make e2e-test               # E2E テスト（ビルド → 実バイナリで CLI 動作検証）
+make e2e-test-integration   # 実際に 1Password から読む統合テスト（OP_ACCOUNT=xxx が必須）
+make lint                   # golangci-lint + shellcheck + cppcheck + clang-analyzer + clang-tidy
+make fmt                    # go fmt + golangci-lint fmt（goimports）+ shfmt + clang-format
+make clean                  # バイナリ削除
 ```
 
 ビルドは darwin 専用（`//go:build darwin`）。`CGO_ENABLED=1` が必須（macOS Keychain API を CGO 経由で呼ぶため）。
 
 `make fmt` / `make lint` は `mise exec --` 経由で golangci-lint・shfmt・shellcheck を実行する。`mise` が PATH にない場合は失敗する（Go と同様に必須依存）。ツールバージョンは `mise.toml` で管理。
+
+`make lint` の C lint（`c.lint`）は `cppcheck` と Homebrew `llvm`（clang-tidy 提供）が必要。`brew install cppcheck llvm`。
 
 ## Architecture
 
@@ -27,9 +30,19 @@ make clean       # バイナリ削除
 cmd/op-vault/main.go   エントリポイント。run() に処理を委譲して os.Exit のみ main で呼ぶ
 internal/cli/          kong サブコマンド実装
 internal/keychain/     macOS Keychain 操作（CGO）
+internal/op/           1Password SDK ラッパー（op.Resolve で op:// ref を解決）
 internal/tracing/      OTel 計装（TracerProvider 初期化・Tracer アクセサ・スパンユーティリティ）
 scripts/e2e-test.sh    実バイナリを直接実行する E2E テスト
 ```
+
+### read コマンドのフロー
+
+`keychain.Get` → キャッシュヒット → 値を返す  
+`CacheMissError` → `op.Resolve`（1Password SDK）→ `keychain.Set` でキャッシュ書き込み → 値を返す  
+`NotFoundError` → キーチェーンファイル未存在（`op-vault init` 未実行）
+
+キーチェーンの保存形式: `service=op_ref`・`account=OP_ACCOUNT`・data は `Entry{Ref, ItemName, Value}` の JSON。
+キーチェーンパス: `~/Library/Keychains/<OP_VAULT_NAME>.keychain-db`（デフォルト: `op-vault`）。
 
 ### CLI フレームワーク
 
@@ -54,6 +67,11 @@ scripts/e2e-test.sh    実バイナリを直接実行する E2E テスト
 ```bash
 ls $(go env GOMODCACHE)/go.opentelemetry.io/otel@<version>/semconv/ | sort -V | tail -5
 ```
+
+## 機能の追加・削除順序
+
+- **追加・更新**: `scripts/e2e-test.sh` にテストを先に書き、実装はその後
+- **削除**: 実装（`internal/cli/`・`internal/keychain/` 等）を先に消し、`e2e-test.sh` のテストを後で削除
 
 ## Import 順序
 
