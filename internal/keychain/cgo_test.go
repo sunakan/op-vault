@@ -453,7 +453,7 @@ func TestCgoGetSettings(t *testing.T) {
 
 	t.Run("custom lock interval is read back correctly", func(t *testing.T) {
 		path := newTempKeychain(t)
-		if out, err := exec.Command("security", "set-keychain-settings", "-t", "600", path).CombinedOutput(); err != nil { //nolint:gosec
+		if out, err := exec.Command("security", "set-keychain-settings", "-t", "600", path).CombinedOutput(); err != nil { //nolint:gosec // path is a t.TempDir() value, not user input; SecKeychainSetSettings CGO wrapper is not implemented
 			t.Fatalf("set-keychain-settings: %v: %s", err, out)
 		}
 		s, err := cgoGetSettings(path)
@@ -468,7 +468,7 @@ func TestCgoGetSettings(t *testing.T) {
 	t.Run("lock-on-sleep disabled", func(t *testing.T) {
 		path := newTempKeychain(t)
 		// no -l flag disables lock-on-sleep
-		if out, err := exec.Command("security", "set-keychain-settings", path).CombinedOutput(); err != nil { //nolint:gosec
+		if out, err := exec.Command("security", "set-keychain-settings", path).CombinedOutput(); err != nil { //nolint:gosec // path is a t.TempDir() value, not user input; SecKeychainSetSettings CGO wrapper is not implemented
 			t.Fatalf("set-keychain-settings: %v: %s", err, out)
 		}
 		s, err := cgoGetSettings(path)
@@ -483,7 +483,7 @@ func TestCgoGetSettings(t *testing.T) {
 	t.Run("lock-on-sleep enabled", func(t *testing.T) {
 		path := newTempKeychain(t)
 		// -l enables lock-on-sleep
-		if out, err := exec.Command("security", "set-keychain-settings", "-l", path).CombinedOutput(); err != nil { //nolint:gosec
+		if out, err := exec.Command("security", "set-keychain-settings", "-l", path).CombinedOutput(); err != nil { //nolint:gosec // path is a t.TempDir() value, not user input; SecKeychainSetSettings CGO wrapper is not implemented
 			t.Fatalf("set-keychain-settings -l: %v: %s", err, out)
 		}
 		s, err := cgoGetSettings(path)
