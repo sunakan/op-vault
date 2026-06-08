@@ -1,6 +1,7 @@
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
 #include "keychain.h"
+#include <limits.h>
 #include <string.h>
 
 /* kcCreate creates a new keychain file at path, protected by password.
@@ -42,8 +43,11 @@ OSStatus kcOpen(const char *path, SecKeychainRef *out) {
 int kcGetStatus(const char *path, OSStatus *outErr) {
   *outErr = noErr;
   SecKeychainRef ref = NULL;
-  if (SecKeychainOpen(path, &ref) != noErr || ref == NULL)
+  OSStatus openErr = SecKeychainOpen(path, &ref);
+  if (openErr != noErr || ref == NULL) {
+    *outErr = (openErr != noErr) ? openErr : errSecNoSuchKeychain;
     return -1;
+  }
   SecKeychainStatus status = 0;
   OSStatus err = SecKeychainGetStatus(ref, &status);
   CFRelease(ref);
@@ -59,8 +63,11 @@ int kcGetStatus(const char *path, OSStatus *outErr) {
 int kcCountItems(const char *path, OSStatus *outErr) {
   *outErr = noErr;
   SecKeychainRef ref = NULL;
-  if (SecKeychainOpen(path, &ref) != noErr || ref == NULL)
+  OSStatus openErr = SecKeychainOpen(path, &ref);
+  if (openErr != noErr || ref == NULL) {
+    *outErr = (openErr != noErr) ? openErr : errSecNoSuchKeychain;
     return -1;
+  }
   CFStringRef desc =
       CFStringCreateWithCString(NULL, "1Password Cache", kCFStringEncodingUTF8);
   CFArrayRef searchList =
@@ -80,8 +87,13 @@ int kcCountItems(const char *path, OSStatus *outErr) {
   CFRelease(ref);
   int count = 0;
   if (err == noErr && result != NULL) {
-    count = (int)CFArrayGetCount((CFArrayRef)result);
+    CFIndex cfCount = CFArrayGetCount((CFArrayRef)result);
     CFRelease(result);
+    if (cfCount > (CFIndex)INT_MAX) {
+      *outErr = errSecAllocate;
+      return -1;
+    }
+    count = (int)cfCount;
   } else if (err == errSecItemNotFound) {
     count = 0;
   } else {
@@ -98,8 +110,11 @@ int kcGet(const char *path, const char *service, const char *account,
           void **outData, int *outLen, OSStatus *outErr) {
   *outErr = noErr;
   SecKeychainRef ref = NULL;
-  if (SecKeychainOpen(path, &ref) != noErr || ref == NULL)
+  OSStatus openErr = SecKeychainOpen(path, &ref);
+  if (openErr != noErr || ref == NULL) {
+    *outErr = (openErr != noErr) ? openErr : errSecNoSuchKeychain;
     return -1;
+  }
   /* Try to unlock with an empty password before querying.
    * Succeeds silently for no-password keychains — avoids the macOS dialog
    * entirely. For password-protected keychains this fails; macOS then shows the
@@ -137,9 +152,15 @@ int kcGet(const char *path, const char *service, const char *account,
   }
   CFDataRef dat = (CFDataRef)result;
   CFIndex len = CFDataGetLength(dat);
+  if (len < 0 || len > (CFIndex)INT_MAX) {
+    CFRelease(result);
+    *outErr = errSecAllocate;
+    return -1;
+  }
   void *buf = malloc((size_t)len);
   if (buf == NULL) {
     CFRelease(result);
+    *outErr = errSecAllocate;
     return -1;
   }
   memcpy(buf, CFDataGetBytePtr(dat), (size_t)len);
@@ -158,8 +179,11 @@ int kcGetSettings(const char *path, int *lockOnSleep,
                   unsigned int *lockInterval, OSStatus *outErr) {
   *outErr = noErr;
   SecKeychainRef ref = NULL;
-  if (SecKeychainOpen(path, &ref) != noErr || ref == NULL)
+  OSStatus openErr = SecKeychainOpen(path, &ref);
+  if (openErr != noErr || ref == NULL) {
+    *outErr = (openErr != noErr) ? openErr : errSecNoSuchKeychain;
     return -1;
+  }
   SecKeychainSettings settings = {SEC_KEYCHAIN_SETTINGS_VERS1, (Boolean)0,
                                   (Boolean)0, 0};
   OSStatus err = SecKeychainCopySettings(ref, &settings);
@@ -328,8 +352,11 @@ char **kcList(const char *path, char ***outAccounts, char ***outDates,
   *outAccounts = NULL;
   *outDates = NULL;
   SecKeychainRef ref = NULL;
-  if (SecKeychainOpen(path, &ref) != noErr || ref == NULL)
+  OSStatus openErr = SecKeychainOpen(path, &ref);
+  if (openErr != noErr || ref == NULL) {
+    *outErr = (openErr != noErr) ? openErr : errSecNoSuchKeychain;
     return NULL;
+  }
   CFStringRef desc =
       CFStringCreateWithCString(NULL, "1Password Cache", kCFStringEncodingUTF8);
   CFArrayRef searchList =
@@ -354,7 +381,13 @@ char **kcList(const char *path, char ***outAccounts, char ***outDates,
     return NULL;
   }
   CFArrayRef arr = (CFArrayRef)result;
-  int count = (int)CFArrayGetCount(arr);
+  CFIndex cfCount = CFArrayGetCount(arr);
+  if (cfCount > (CFIndex)INT_MAX) {
+    CFRelease(result);
+    *outErr = errSecAllocate;
+    return NULL;
+  }
+  int count = (int)cfCount;
   char **refs = (char **)malloc((size_t)count * sizeof(char *));
   char **accounts = (char **)malloc((size_t)count * sizeof(char *));
   char **dates = (char **)malloc((size_t)count * sizeof(char *));

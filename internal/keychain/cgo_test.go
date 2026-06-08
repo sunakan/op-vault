@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"testing"
 )
 
@@ -447,6 +448,264 @@ func TestCgoGetSettings(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "nonexistent.keychain-db")
 		if _, err := cgoGetSettings(path); err == nil {
 			t.Fatal("expected error for nonexistent keychain, got nil")
+		}
+	})
+
+	t.Run("custom lock interval is read back correctly", func(t *testing.T) {
+		path := newTempKeychain(t)
+		if out, err := exec.Command("security", "set-keychain-settings", "-t", "600", path).CombinedOutput(); err != nil { //nolint:gosec // path is a t.TempDir() value, not user input; SecKeychainSetSettings CGO wrapper is not implemented
+			t.Fatalf("set-keychain-settings: %v: %s", err, out)
+		}
+		s, err := cgoGetSettings(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if s.LockInterval != 600 {
+			t.Errorf("got LockInterval=%d, want 600", s.LockInterval)
+		}
+	})
+
+	t.Run("lock-on-sleep disabled", func(t *testing.T) {
+		path := newTempKeychain(t)
+		// no -l flag disables lock-on-sleep
+		if out, err := exec.Command("security", "set-keychain-settings", path).CombinedOutput(); err != nil { //nolint:gosec // path is a t.TempDir() value, not user input; SecKeychainSetSettings CGO wrapper is not implemented
+			t.Fatalf("set-keychain-settings: %v: %s", err, out)
+		}
+		s, err := cgoGetSettings(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if s.LockOnSleep {
+			t.Error("expected LockOnSleep=false after set-keychain-settings without -l")
+		}
+	})
+
+	t.Run("lock-on-sleep enabled", func(t *testing.T) {
+		path := newTempKeychain(t)
+		// -l enables lock-on-sleep
+		if out, err := exec.Command("security", "set-keychain-settings", "-l", path).CombinedOutput(); err != nil { //nolint:gosec // path is a t.TempDir() value, not user input; SecKeychainSetSettings CGO wrapper is not implemented
+			t.Fatalf("set-keychain-settings -l: %v: %s", err, out)
+		}
+		s, err := cgoGetSettings(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !s.LockOnSleep {
+			t.Error("expected LockOnSleep=true after set-keychain-settings -l")
+		}
+	})
+}
+
+func TestCgoList(t *testing.T) {
+	t.Run("empty keychain returns nil", func(t *testing.T) {
+		path := newTempKeychain(t)
+		entries, err := cgoList(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(entries) != 0 {
+			t.Fatalf("got %d entries, want 0", len(entries))
+		}
+	})
+
+	t.Run("returns ref and account for added item", func(t *testing.T) {
+		path := newTempKeychain(t)
+		ref, account := "op://V/Item/f", "myaccount"
+		if err := cgoAdd(path, ref, account, keychainKind, ref, []byte(`"v"`)); err != nil {
+			t.Fatalf("cgoAdd: %v", err)
+		}
+		entries, err := cgoList(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(entries) != 1 {
+			t.Fatalf("got %d entries, want 1", len(entries))
+		}
+		if entries[0].Ref != ref {
+			t.Errorf("Ref: got %q, want %q", entries[0].Ref, ref)
+		}
+		if entries[0].Account != account {
+			t.Errorf("Account: got %q, want %q", entries[0].Account, account)
+		}
+	})
+
+	t.Run("UpdatedAt matches YYYY-MM-DD HH:MM:SS", func(t *testing.T) {
+		path := newTempKeychain(t)
+		if err := cgoAdd(path, "op://V/Item/f", "acct", keychainKind, "op://V/Item/f", []byte(`"v"`)); err != nil {
+			t.Fatalf("cgoAdd: %v", err)
+		}
+		entries, err := cgoList(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(entries) != 1 {
+			t.Fatalf("got %d entries, want 1", len(entries))
+		}
+		matched, _ := regexp.MatchString(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$`, entries[0].UpdatedAt)
+		if !matched {
+			t.Errorf("UpdatedAt %q does not match YYYY-MM-DD HH:MM:SS", entries[0].UpdatedAt)
+		}
+	})
+
+	t.Run("multiple items count matches", func(t *testing.T) {
+		path := newTempKeychain(t)
+		refs := []string{"op://V/A/f", "op://V/B/f", "op://V/C/f"}
+		for _, ref := range refs {
+			if err := cgoAdd(path, ref, "acct", keychainKind, ref, []byte(`"v"`)); err != nil {
+				t.Fatalf("cgoAdd %s: %v", ref, err)
+			}
+		}
+		entries, err := cgoList(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(entries) != len(refs) {
+			t.Fatalf("got %d entries, want %d", len(entries), len(refs))
+		}
+	})
+
+	t.Run("accounts preserved across multiple items", func(t *testing.T) {
+		path := newTempKeychain(t)
+		if err := cgoAdd(path, "op://V/A/f", "account-a", keychainKind, "op://V/A/f", []byte(`"v"`)); err != nil {
+			t.Fatalf("cgoAdd A: %v", err)
+		}
+		if err := cgoAdd(path, "op://V/B/f", "account-b", keychainKind, "op://V/B/f", []byte(`"v"`)); err != nil {
+			t.Fatalf("cgoAdd B: %v", err)
+		}
+		entries, err := cgoList(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(entries) != 2 {
+			t.Fatalf("got %d entries, want 2", len(entries))
+		}
+		accountByRef := make(map[string]string, len(entries))
+		for _, e := range entries {
+			accountByRef[e.Ref] = e.Account
+		}
+		if accountByRef["op://V/A/f"] != "account-a" {
+			t.Errorf("A: got account %q, want account-a", accountByRef["op://V/A/f"])
+		}
+		if accountByRef["op://V/B/f"] != "account-b" {
+			t.Errorf("B: got account %q, want account-b", accountByRef["op://V/B/f"])
+		}
+	})
+
+	t.Run("non-cache items not listed", func(t *testing.T) {
+		path := newTempKeychain(t)
+		if err := cgoAdd(path, "op://V/Cache/f", "acct", keychainKind, "op://V/Cache/f", []byte(`"v"`)); err != nil {
+			t.Fatalf("cgoAdd cache: %v", err)
+		}
+		if err := cgoAdd(path, "op://V/Other/f", "acct", "Other", "op://V/Other/f", []byte(`"v"`)); err != nil {
+			t.Fatalf("cgoAdd non-cache: %v", err)
+		}
+		entries, err := cgoList(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(entries) != 1 {
+			t.Fatalf("got %d entries, want 1 (non-cache item must be excluded)", len(entries))
+		}
+		if entries[0].Ref != "op://V/Cache/f" {
+			t.Errorf("expected cache item, got %q", entries[0].Ref)
+		}
+	})
+
+	t.Run("nonexistent keychain returns nil", func(t *testing.T) {
+		// SecKeychainOpen is lazy (always noErr), so SecItemCopyMatching returns
+		// errSecItemNotFound which kcList maps to an empty result.
+		path := filepath.Join(t.TempDir(), "nonexistent.keychain-db")
+		entries, err := cgoList(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(entries) != 0 {
+			t.Fatalf("got %d entries, want 0", len(entries))
+		}
+	})
+}
+
+func TestCgoDeleteItem(t *testing.T) {
+	t.Run("delete existing item", func(t *testing.T) {
+		path := newTempKeychain(t)
+		ref, account := "op://V/Item/f", "acct"
+		if err := cgoAdd(path, ref, account, keychainKind, ref, []byte(`"v"`)); err != nil {
+			t.Fatalf("cgoAdd: %v", err)
+		}
+		if err := cgoDeleteItem(path, ref, account); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		_, found, err := cgoGet(path, ref, account)
+		if err != nil {
+			t.Fatalf("cgoGet after delete: %v", err)
+		}
+		if found {
+			t.Fatal("expected item to be gone after delete")
+		}
+	})
+
+	t.Run("count decreases after delete", func(t *testing.T) {
+		path := newTempKeychain(t)
+		refs := []string{"op://V/A/f", "op://V/B/f", "op://V/C/f"}
+		for _, ref := range refs {
+			if err := cgoAdd(path, ref, "acct", keychainKind, ref, []byte(`"v"`)); err != nil {
+				t.Fatalf("cgoAdd %s: %v", ref, err)
+			}
+		}
+		if err := cgoDeleteItem(path, "op://V/B/f", "acct"); err != nil {
+			t.Fatalf("cgoDeleteItem: %v", err)
+		}
+		n, err := cgoCountItems(path)
+		if err != nil {
+			t.Fatalf("cgoCountItems: %v", err)
+		}
+		if n != 2 {
+			t.Fatalf("got %d items, want 2 after deleting one of three", n)
+		}
+	})
+
+	t.Run("delete nonexistent item returns error", func(t *testing.T) {
+		path := newTempKeychain(t)
+		if err := cgoDeleteItem(path, "op://V/Missing/f", "acct"); err == nil {
+			t.Fatal("expected error for nonexistent item, got nil")
+		}
+	})
+
+	t.Run("wrong account does not delete item", func(t *testing.T) {
+		path := newTempKeychain(t)
+		ref := "op://V/Item/f"
+		if err := cgoAdd(path, ref, "account-a", keychainKind, ref, []byte(`"v"`)); err != nil {
+			t.Fatalf("cgoAdd: %v", err)
+		}
+		if err := cgoDeleteItem(path, ref, "account-b"); err == nil {
+			t.Fatal("expected error when deleting with wrong account, got nil")
+		}
+		_, found, err := cgoGet(path, ref, "account-a")
+		if err != nil {
+			t.Fatalf("cgoGet: %v", err)
+		}
+		if !found {
+			t.Fatal("expected original item to survive delete with wrong account")
+		}
+	})
+
+	t.Run("non-cache item is not deleted", func(t *testing.T) {
+		// kcDeleteItem scopes the query with kSecAttrDescription="1Password Cache".
+		// An item stored with a different description must not be deleted.
+		path := newTempKeychain(t)
+		ref, account := "op://V/Item/f", "acct"
+		if err := cgoAdd(path, ref, account, "Other", ref, []byte(`"v"`)); err != nil {
+			t.Fatalf("cgoAdd non-cache: %v", err)
+		}
+		if err := cgoDeleteItem(path, ref, account); err == nil {
+			t.Fatal("expected error when deleting non-cache item, got nil")
+		}
+		_, found, err := cgoGet(path, ref, account)
+		if err != nil {
+			t.Fatalf("cgoGet: %v", err)
+		}
+		if !found {
+			t.Fatal("expected non-cache item to survive cgoDeleteItem")
 		}
 	})
 }
