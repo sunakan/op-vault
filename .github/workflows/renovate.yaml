@@ -4,7 +4,6 @@ on:
   schedule:
     - cron: "0 1 * * *" # daily 10:00 JST (UTC 01:00)
   workflow_dispatch:
-
 permissions: {}
 
 jobs:
@@ -15,6 +14,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
         with:
