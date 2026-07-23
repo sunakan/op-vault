@@ -1,3 +1,7 @@
 op-vault
 !cmd/op-vault
 !cmd/op-vault/*
+
+*.md
+!.claude/commands/*.md
+!README.*
