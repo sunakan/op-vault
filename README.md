@@ -60,6 +60,7 @@ OP_ACCOUNT=my-account op-vault read 'op://Personal/GitHub/token'
 | `clear` | Remove all cached entries (keychain file is kept) |
 | `status` | Show keychain status and cache entry count |
 | `reset` | Remove the keychain |
+| `docs` | Print the README documentation |
 | `version` | Print version |
 
 `read`, `set`, and `refresh` require a 1Password account via `--account` / `-a` or `OP_ACCOUNT`.  

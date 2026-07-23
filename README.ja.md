@@ -60,6 +60,7 @@ OP_ACCOUNT=my-account op-vault read 'op://Personal/GitHub/token'
 | `clear` | キャッシュエントリをすべて削除する（キーチェーンファイルは保持） |
 | `status` | キーチェーンの状態とキャッシュ件数を表示する |
 | `reset` | キーチェーンを削除する |
+| `docs` | README のドキュメントを表示する |
 | `version` | バージョンを表示する |
 
 `read` / `set` / `refresh` は `--account` / `-a` または `OP_ACCOUNT` でアカウントを指定する。  
