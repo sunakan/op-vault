@@ -28,6 +28,7 @@ type CLI struct {
 	Read    cli.ReadCmd    `cmd:"" help:"Get a secret from cache or 1Password"`
 	List    cli.ListCmd    `cmd:"" help:"List all cached op:// refs"`
 	Refresh cli.RefreshCmd `cmd:"" help:"Re-fetch all cached secrets from 1Password"`
+	Docs    cli.DocsCmd    `cmd:"" help:"Print the README documentation"`
 }
 
 func main() {
