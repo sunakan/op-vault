@@ -25,7 +25,7 @@ brew install sunakan/op-vault/op-vault
 ```toml
 # mise.toml
 [tools]
-"github:sunakan/op-vault" = "0.3.1"
+"github:sunakan/op-vault" = "0.4.0"
 ```
 
 ### Build from source
