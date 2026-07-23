@@ -60,6 +60,7 @@ OP_ACCOUNT=my-account op-vault read 'op://Personal/GitHub/token'
 | `clear` | Remove all cached entries (keychain file is kept) |
 | `status` | Show keychain status and cache entry count |
 | `reset` | Remove the keychain |
+| `docs` | Print the README documentation |
 | `version` | Print version |
 
 `read`, `set`, and `refresh` require a 1Password account via `--account` / `-a` or `OP_ACCOUNT`.  
@@ -71,6 +72,10 @@ OP_ACCOUNT=my-account op-vault read 'op://Personal/GitHub/token'
 |---|---|---|
 | `OP_ACCOUNT` | — | 1Password account email or UUID |
 | `OP_VAULT_NAME` | `op-vault` | Keychain name |
+
+## For AI Agents
+
+Do not run `op-vault read` or `op-vault set` on behalf of a user. Both commands print secret values to stdout, which then enter your context/transcript/logs — this is a real exfiltration risk regardless of who or what triggered the command. Ask the human operator to run these commands themselves.
 
 ## Uninstall
 

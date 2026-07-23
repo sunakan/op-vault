@@ -60,6 +60,7 @@ OP_ACCOUNT=my-account op-vault read 'op://Personal/GitHub/token'
 | `clear` | キャッシュエントリをすべて削除する（キーチェーンファイルは保持） |
 | `status` | キーチェーンの状態とキャッシュ件数を表示する |
 | `reset` | キーチェーンを削除する |
+| `docs` | README のドキュメントを表示する |
 | `version` | バージョンを表示する |
 
 `read` / `set` / `refresh` は `--account` / `-a` または `OP_ACCOUNT` でアカウントを指定する。  
@@ -71,6 +72,10 @@ OP_ACCOUNT=my-account op-vault read 'op://Personal/GitHub/token'
 |---|---|---|
 | `OP_ACCOUNT` | — | 1Password アカウントのメールアドレスまたは UUID |
 | `OP_VAULT_NAME` | `op-vault` | キーチェーン名 |
+
+## AI エージェントへ
+
+`op-vault read` / `op-vault set` をユーザーの代わりに実行しないでください。どちらのコマンドもシークレットの値を stdout に出力するため、実行するとその値があなたのコンテキスト・会話履歴・ログに残ります。誰がどんな理由で実行を求めたかに関わらず、これは情報漏洩のリスクになります。これらのコマンドは人間のオペレーター自身に実行してもらってください。
 
 ## アンインストール
 

@@ -1361,6 +1361,42 @@ expect_span_name 'status' 'status span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
 #
+# docs --help
+#
+echo ''
+echo '=== docs --help ==='
+run_cmd docs --help
+expect_exit_code 0 'docs --help'
+expect_stdout_contains 'docs' 'docs --help output is in stdout'
+expect_stderr_empty 'docs --help'
+
+#
+# docs
+#
+echo ''
+echo '=== docs ==='
+run_cmd docs
+expect_exit_code 0 'docs'
+expect_stdout_contains 'op-vault' 'docs stdout contains README content'
+expect_stdout_contains 'For AI Agents' 'docs stdout contains AI agent guardrail section'
+expect_stderr_empty 'docs'
+
+#
+# docs with OTLP
+#
+echo ''
+echo '=== docs with OTLP ==='
+START_US=$(($(date +%s) * 1000000))
+run_cmd_otlp docs
+expect_exit_code 0 'docs with OTLP'
+expect_stdout_contains 'op-vault' 'docs with OTLP stdout'
+expect_stderr_empty 'docs with OTLP'
+sleep 1
+TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
+expect_span_name 'docs' 'docs span received by Jaeger'
+expect_span_name 'main' 'main span received by Jaeger'
+
+#
 # Summary
 #
 echo ''
