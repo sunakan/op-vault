@@ -5,4 +5,16 @@
   ],
   // cooldown
   minimumReleaseAge: "7 days",
+  packageRules: [
+    {
+      description: "Group all GitHub Actions updates into one PR",
+      matchManagers: [
+        "github-actions",
+      ],
+      groupName: "GitHub Actions",
+      groupSlug: "github-actions",
+      groupSingleUpdates: true,
+      separateMajorMinor: false,
+    },
+  ],
 }
