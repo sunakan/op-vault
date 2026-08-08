@@ -1,2 +1,2 @@
 [tools]
-"github:jaegertracing/jaeger" = "2.19.0"
+"github:jaegertracing/jaeger" = "v2.20.0"
