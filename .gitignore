@@ -5,3 +5,5 @@ op-vault
 *.md
 !.claude/commands/*.md
 !README.*
+
+tmp/
