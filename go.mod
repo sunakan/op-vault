@@ -3,7 +3,7 @@ module github.com/sunakan/op-vault
 go 1.26.3
 
 require (
-	github.com/1password/onepassword-sdk-go v0.4.1-beta.1
+	github.com/1password/onepassword-sdk-go v0.4.1
 	github.com/alecthomas/kong v1.15.0
 	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.43.0
