@@ -3,11 +3,6 @@
   extends: [
     "config:recommended",
   ],
-  enabledManagers: [
-    "docker-compose",
-    "github-actions",
-    "mise",
-  ],
   // cooldown
   minimumReleaseAge: "7 days",
 }
