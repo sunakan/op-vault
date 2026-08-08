@@ -20,7 +20,7 @@ var version = "0.0.0"
 
 type CLI struct {
 	Version cli.VersionCmd `cmd:"" help:"Print version"`
-	Init    cli.InitCmd    `cmd:"" help:"Initialize the keychain"`
+	Init    cli.InitCmd    `cmd:"" help:"Initialize the keychain and choose its password mode"`
 	Status  cli.StatusCmd  `cmd:"" help:"Show keychain status and cache entry count"`
 	Set     cli.SetCmd     `cmd:"" help:"Cache a secret in the keychain"`
 	Clear   cli.ClearCmd   `cmd:"" help:"Remove all cached entries without deleting the keychain"`
