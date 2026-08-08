@@ -256,10 +256,13 @@ int kcClearItems(const char *path, OSStatus *outErr) {
 
 /* kcAdd adds or updates a generic password in the keychain referenced by kref.
  * On errSecDuplicateItem, falls back to SecItemUpdate to overwrite the value.
- * kSecAttrAccess restricts reads to the current binary only — prevents other
- * processes from silently reading cached 1Password secrets. NULL trusted list
- * (any app can read) was the previous approach; replaced to limit silent access
- * to cached secrets. */
+ * For newly created items, kSecAttrAccess restricts direct Keychain API reads
+ * to the current binary. The duplicate update path preserves the existing
+ * access settings. The access object does not authenticate the process that
+ * launches the binary: another process running as the same macOS login user can
+ * invoke op-vault and capture its stdout. NULL trusted list (any app can read)
+ * was the previous approach; replaced to reduce direct silent access to cached
+ * secrets. */
 OSStatus kcAdd(SecKeychainRef kref, const char *service, const char *account,
                const char *description, const char *label, const void *data,
                int dataLen) {
