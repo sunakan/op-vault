@@ -49,6 +49,33 @@ op-vault init
 OP_ACCOUNT=my-account op-vault read 'op://Personal/GitHub/token'
 ```
 
+## Supported references
+
+op-vault supports standard [1Password secret references](https://developer.1password.com/docs/cli/secret-reference-syntax/) and adds a reference for an item's primary autofill website.
+
+| Value | Reference |
+|---|---|
+| Built-in field | `op://Vault/Item/username` or `op://Vault/Item/password` |
+| Custom field without a section | `op://Vault/Item/field` |
+| Custom field inside a section | `op://Vault/Item/section/field` |
+| Primary autofill website | `op://Vault/Item/website` |
+
+Custom fields already use the standard 1Password resolver, regardless of whether their type is text, concealed, email, URL, or another supported field type. For example, a custom field named `a1` is read with:
+
+```bash
+OP_ACCOUNT=my-account op-vault read 'op://Test/ExistedItem/a1'
+```
+
+Field, section, item, and vault names that contain unsupported characters must be referenced by their IDs. In the 1Password app, use **Copy Secret Reference** on a field to get a valid reference. IDs also avoid ambiguity when names are duplicated.
+
+For example, a custom field with a Japanese label can be read using its field ID:
+
+```bash
+OP_ACCOUNT=my-account op-vault read 'op://Test/ExistedItem/<field-id>'
+```
+
+The top-level field name `website` is reserved by op-vault for the primary autofill website. It returns the first website shown on the item. Other websites aren't currently selectable. A custom field named `website` inside a section remains a normal custom field; for a top-level custom field with that name, use its field ID.
+
 ## Security Modes
 
 `op-vault init` lets you choose how the dedicated Keychain is unlocked:
