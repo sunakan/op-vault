@@ -68,6 +68,12 @@ OP_ACCOUNT=my-account op-vault read 'op://Test/ExistedItem/a1'
 
 日本語などシークレット参照でサポートされない文字を含むフィールド名・セクション名・アイテム名・Vault名は、名前ではなくIDで指定する。1Passwordアプリでフィールドの **Copy Secret Reference**（シークレット参照をコピー）を使うと、有効な参照を取得できる。名前が重複する場合もIDを使うと曖昧さを避けられる。
 
+たとえば、日本語名のカスタムフィールドはフィールドIDを使って次のように読む。
+
+```bash
+OP_ACCOUNT=my-account op-vault read 'op://Test/ExistedItem/<field-id>'
+```
+
 トップレベルの `website` は、Primary Website用としてop-vaultが予約する。アイテムに表示される最初のWebサイトを返し、2件目以降は現時点では選択できない。セクション内にある `website` というカスタムフィールドは通常どおり参照できる。トップレベルに同名のカスタムフィールドがある場合は、そのフィールドIDで指定する。
 
 ## セキュリティモード

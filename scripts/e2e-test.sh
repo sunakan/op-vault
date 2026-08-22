@@ -107,6 +107,22 @@ expect_stdout_equals() {
   fi
 }
 
+expect_stdout_equals_redacted() {
+  if [ "$STDOUT" = "$1" ]; then
+    _pass "stdout matches expected value  $2"
+  else
+    _fail "stdout differs from expected value  $2"
+  fi
+}
+
+expect_stdout_not_empty() {
+  if [ -n "$STDOUT" ]; then
+    _pass "stdout is not empty  $1"
+  else
+    _fail "stdout is empty  $1"
+  fi
+}
+
 expect_stdout_empty() {
   if [ -z "$STDOUT" ]; then
     _pass "stdout is empty  $1"
@@ -896,6 +912,40 @@ else
   expect_exit_code 0 'read (custom field)'
   expect_stdout_equals 'https://example.com/a1' 'read (custom field) stdout'
   expect_stderr_empty 'read (custom field)'
+fi
+
+#
+# read (custom fields by ID)
+#
+echo ''
+echo '=== read (custom fields by ID) ==='
+if [ -z "${OP_TEST_INTEGRATION:-}" ]; then
+  _skip 'read (custom fields by ID): requires 1Password (set OP_TEST_INTEGRATION=1 to run)'
+else
+  # Requires these fields on Test/ExistedItem. IDs allow labels with unsupported
+  # characters, such as Japanese, to be referenced without ambiguity.
+  # Given
+  run_cmd reset
+  run_cmd_stdin '' init
+  expect_exit_code 0 'read custom fields by ID: precondition init'
+
+  # Address field with label "住所"
+  run_cmd read "op://Test/ExistedItem/mr7ri2myeosr5ksggtsraaofze"
+  expect_exit_code 0 'read (address custom field by ID)'
+  expect_stdout_equals_redacted '住所123' 'read (address custom field by ID) stdout'
+  expect_stderr_empty 'read (address custom field by ID)'
+
+  # Concealed field with label "パスワード". Do not print its expected or actual value.
+  run_cmd read "op://Test/ExistedItem/y76dnlsmu3ikzl6ipdxgpc32aa"
+  expect_exit_code 0 'read (concealed custom field by ID)'
+  expect_stdout_not_empty 'read (concealed custom field by ID) stdout'
+  expect_stderr_empty 'read (concealed custom field by ID)'
+
+  # Email field with label "メール"
+  run_cmd read "op://Test/ExistedItem/dda2rh22hpiy7s6xtpxgbi5bam"
+  expect_exit_code 0 'read (email custom field by ID)'
+  expect_stdout_equals_redacted 'test@example.com' 'read (email custom field by ID) stdout'
+  expect_stderr_empty 'read (email custom field by ID)'
 fi
 
 #
