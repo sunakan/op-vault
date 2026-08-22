@@ -99,6 +99,14 @@ expect_stdout_contains() {
   fi
 }
 
+expect_stdout_equals() {
+  if [ "$STDOUT" = "$1" ]; then
+    _pass "stdout equals '$1'  $2"
+  else
+    _fail "stdout differs from '$1'  $2  (actual: $(printf '%s' "$STDOUT" | head -1))"
+  fi
+}
+
 expect_stdout_empty() {
   if [ -z "$STDOUT" ]; then
     _pass "stdout is empty  $1"
@@ -846,6 +854,48 @@ else
   expect_exit_code 0 'read (cache miss)'
   expect_stdout_contains '___existed-secret___' 'read (cache miss) stdout'
   expect_stderr_empty 'read (cache miss)'
+fi
+
+#
+# read (primary website)
+#
+echo ''
+echo '=== read (primary website) ==='
+if [ -z "${OP_TEST_INTEGRATION:-}" ]; then
+  _skip 'read (primary website): requires 1Password (set OP_TEST_INTEGRATION=1 to run)'
+else
+  # Requires 1Password item: the primary website of Test/ExistedItem is https://example.com/test
+  # Given
+  run_cmd reset
+  run_cmd_stdin '' init
+  expect_exit_code 0 'read primary website: precondition init'
+  # When
+  run_cmd read "op://Test/ExistedItem/website"
+  # Then
+  expect_exit_code 0 'read (primary website)'
+  expect_stdout_equals 'https://example.com/test' 'read (primary website) stdout'
+  expect_stderr_empty 'read (primary website)'
+fi
+
+#
+# read (custom field)
+#
+echo ''
+echo '=== read (custom field) ==='
+if [ -z "${OP_TEST_INTEGRATION:-}" ]; then
+  _skip 'read (custom field): requires 1Password (set OP_TEST_INTEGRATION=1 to run)'
+else
+  # Requires 1Password item: op://Test/ExistedItem/a1 = https://example.com/a1
+  # Given
+  run_cmd reset
+  run_cmd_stdin '' init
+  expect_exit_code 0 'read custom field: precondition init'
+  # When
+  run_cmd read "op://Test/ExistedItem/a1"
+  # Then
+  expect_exit_code 0 'read (custom field)'
+  expect_stdout_equals 'https://example.com/a1' 'read (custom field) stdout'
+  expect_stderr_empty 'read (custom field)'
 fi
 
 #

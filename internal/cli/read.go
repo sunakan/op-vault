@@ -17,7 +17,7 @@ import (
 
 // ReadCmd implements the read subcommand
 type ReadCmd struct {
-	Ref     string `arg:"" help:"op://VaultName/ItemName(or UUID)/password"`
+	Ref     string `arg:"" help:"op://VaultName/ItemName(or UUID)/[section/]field (use website for the primary website)"`
 	Account string `short:"a" env:"OP_ACCOUNT" optional:"" help:"1Password account name or UUID"`
 }
 

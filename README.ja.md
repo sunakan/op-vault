@@ -49,6 +49,27 @@ op-vault init
 OP_ACCOUNT=my-account op-vault read 'op://Personal/GitHub/token'
 ```
 
+## 対応する参照
+
+op-vault は標準の [1Password シークレット参照](https://developer.1password.com/docs/cli/secret-reference-syntax/)に加えて、アイテムのPrimary Website（自動入力用Webサイト）を参照できる。
+
+| 値 | 参照 |
+|---|---|
+| 組み込みフィールド | `op://Vault/Item/username` または `op://Vault/Item/password` |
+| セクション外のカスタムフィールド | `op://Vault/Item/field` |
+| セクション内のカスタムフィールド | `op://Vault/Item/section/field` |
+| Primary Website | `op://Vault/Item/website` |
+
+カスタムフィールドは、テキスト・パスワード・メール・URLなど対応しているフィールド型であれば、既存の1Password resolverでそのまま取得できる。たとえば `a1` というカスタムフィールドは次のように読む。
+
+```bash
+OP_ACCOUNT=my-account op-vault read 'op://Test/ExistedItem/a1'
+```
+
+日本語などシークレット参照でサポートされない文字を含むフィールド名・セクション名・アイテム名・Vault名は、名前ではなくIDで指定する。1Passwordアプリでフィールドの **Copy Secret Reference**（シークレット参照をコピー）を使うと、有効な参照を取得できる。名前が重複する場合もIDを使うと曖昧さを避けられる。
+
+トップレベルの `website` は、Primary Website用としてop-vaultが予約する。アイテムに表示される最初のWebサイトを返し、2件目以降は現時点では選択できない。セクション内にある `website` というカスタムフィールドは通常どおり参照できる。トップレベルに同名のカスタムフィールドがある場合は、そのフィールドIDで指定する。
+
 ## セキュリティモード
 
 `op-vault init` では、専用キーチェーンのアンロック方法を選択する。
