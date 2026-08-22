@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 
 	"go.opentelemetry.io/otel"
@@ -66,7 +67,14 @@ func newExporter(ctx context.Context, name string) (sdktrace.SpanExporter, error
 		if endpoint == "" {
 			return nil, errors.New("OP_VAULT_OTLP_ENDPOINT is required when OP_VAULT_TRACES_EXPORTER=otlp")
 		}
-		return otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(endpoint))
+		endpointURL, err := url.Parse(endpoint)
+		if err != nil {
+			return nil, fmt.Errorf("invalid OP_VAULT_OTLP_ENDPOINT: %w", err)
+		}
+		if endpointURL.Path == "" {
+			endpointURL.Path = "/v1/traces"
+		}
+		return otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(endpointURL.String()))
 	default:
 		return nil, fmt.Errorf("unknown OP_VAULT_TRACES_EXPORTER: %q (none|stdout|otlp)", name)
 	}
