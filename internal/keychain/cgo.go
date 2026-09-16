@@ -9,6 +9,7 @@ package keychain
 #include "keychain.h"
 */
 import "C" //nolint:gocritic // CGO requires import "C" as its own statement immediately after the C comment block
+
 import (
 	"fmt"
 	"unsafe" //nolint:gocritic
