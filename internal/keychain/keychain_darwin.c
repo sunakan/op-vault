@@ -55,7 +55,7 @@ int kcGetStatus(const char *path, OSStatus *outErr) {
     *outErr = err;
     return -1;
   }
-  return (status & kSecUnlockStateStatus) ? 1 : 0;
+  return (status & (SecKeychainStatus)kSecUnlockStateStatus) ? 1 : 0;
 }
 
 /* kcCountItems returns the number of "1Password Cache" generic password items
