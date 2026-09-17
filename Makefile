@@ -30,7 +30,7 @@ test: ## 単体テスト
 
 .PHONY: e2e-test
 e2e-test: ## e2e-test
-	@./scripts/e2e-test.sh
+	@OP_ACCOUNT=dummy ./scripts/e2e-test.sh
 
 .PHONY: e2e-test-integration
 e2e-test-integration: ## e2e-testで、実際に1Passwordから読み込むテスト(OP_ACCOUNT=xxxが必須)

@@ -1,6 +1,6 @@
 module github.com/sunakan/op-vault
 
-go 1.26.3
+go 1.27.1
 
 require (
 	github.com/1password/onepassword-sdk-go v0.4.1
