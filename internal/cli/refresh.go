@@ -30,8 +30,7 @@ func (c *RefreshCmd) Run(ctx context.Context) error {
 	entries, err := keychain.List(ctx)
 	if err != nil {
 		tracing.SetSpanError(span, err)
-		var notFound *keychain.NotFoundError
-		if errors.As(err, &notFound) {
+		if _, ok := errors.AsType[*keychain.NotFoundError](err); ok {
 			return errors.New("keychain not found: run 'op-vault init'")
 		}
 		return err

@@ -45,8 +45,7 @@ func (c *ReadCmd) Run(ctx context.Context) error {
 		return nil
 	}
 
-	var cacheMiss *keychain.CacheMissError
-	if errors.As(err, &cacheMiss) {
+	if _, ok := errors.AsType[*keychain.CacheMissError](err); ok {
 		value, err = op.Resolve(ctx, c.Account, c.Ref)
 		if err != nil {
 			tracing.SetSpanError(span, err)
@@ -60,8 +59,7 @@ func (c *ReadCmd) Run(ctx context.Context) error {
 	}
 
 	tracing.SetSpanError(span, err)
-	var notFound *keychain.NotFoundError
-	if errors.As(err, &notFound) {
+	if _, ok := errors.AsType[*keychain.NotFoundError](err); ok {
 		return errors.New("keychain not found: run 'op-vault init'")
 	}
 	return err

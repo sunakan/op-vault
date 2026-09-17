@@ -2,6 +2,6 @@
 lockfile = true
 
 [tools]
-"aqua:golangci/golangci-lint" = "2.12.2"
+"aqua:golangci/golangci-lint" = "2.13.2"
 "aqua:mvdan/sh" = "3.14.1"
 "aqua:koalaman/shellcheck" = "0.11.0"
