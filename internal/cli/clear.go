@@ -28,8 +28,7 @@ func (c *ClearCmd) Run(ctx context.Context) error {
 
 	if err := keychain.Clear(ctx, keychainPath); err != nil {
 		tracing.SetSpanError(span, err)
-		var notFound *keychain.NotFoundError
-		if errors.As(err, &notFound) {
+		if _, ok := errors.AsType[*keychain.NotFoundError](err); ok {
 			return errors.New("keychain not found: run 'op-vault init'")
 		}
 		return err

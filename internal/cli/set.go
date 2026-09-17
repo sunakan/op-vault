@@ -38,8 +38,7 @@ func (c *SetCmd) Run(ctx context.Context) error {
 
 	if err := keychain.Set(ctx, c.Account, c.Ref, c.Value); err != nil {
 		tracing.SetSpanError(span, err)
-		var notFound *keychain.NotFoundError
-		if errors.As(err, &notFound) {
+		if _, ok := errors.AsType[*keychain.NotFoundError](err); ok {
 			return errors.New("keychain not found: run 'op-vault init'")
 		}
 		return err
