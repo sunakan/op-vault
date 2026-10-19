@@ -224,7 +224,7 @@ wait_for_jaeger() {
 }
 
 #
-# API v3 の検索時刻をマイクロ秒まで取得する
+# Get a timestamp with microseconds for API v3 queries
 #
 trace_timestamp() {
   perl -MPOSIX=strftime -MTime::HiRes=gettimeofday -e '
@@ -234,7 +234,7 @@ trace_timestamp() {
 }
 
 #
-# API v3 で対象スパンを最大10秒待つ
+# Wait up to 10 seconds for spans from API v3
 #
 wait_for_traces() {
   local start_time="$1"
@@ -273,7 +273,7 @@ wait_for_traces() {
       fi
       ;;
     404)
-      # 未保存の間だけ再検索し、存在しないエンドポイントは失敗にする。
+      # Retry if no traces are saved yet. Fail for other 404 errors.
       if ! jq -e '.error.message == "No traces found"' "$TRACES_TMP" >/dev/null 2>&1; then
         _fail "Jaeger API v3 returned HTTP 404: $(head -1 "$TRACES_TMP")"
         return 1
@@ -292,7 +292,7 @@ wait_for_traces() {
 }
 
 #
-# スパン名を完全一致で確認する
+# Check that the span name matches exactly
 #
 expect_span_name() {
   local expected="$1" desc="$2"
@@ -330,7 +330,7 @@ expect_file_not_exists() {
 }
 
 #
-# main スパンの OTLP エラーステータスを確認する
+# Check the OTLP error status of the main span
 #
 expect_span_status_error() {
   local desc="$1"
@@ -998,19 +998,19 @@ else
   run_cmd_stdin '' init
   expect_exit_code 0 'read custom fields by ID: precondition init'
 
-  # Address field with label "住所"
+  # Address field with a Japanese label
   run_cmd read "op://Test/ExistedItem/mr7ri2myeosr5ksggtsraaofze"
   expect_exit_code 0 'read (address custom field by ID)'
   expect_stdout_equals_redacted '住所123' 'read (address custom field by ID) stdout'
   expect_stderr_empty 'read (address custom field by ID)'
 
-  # Concealed field with label "パスワード". Do not print its expected or actual value.
+  # Concealed field with a Japanese label. Keep its value out of the output.
   run_cmd read "op://Test/ExistedItem/y76dnlsmu3ikzl6ipdxgpc32aa"
   expect_exit_code 0 'read (concealed custom field by ID)'
   expect_stdout_not_empty 'read (concealed custom field by ID) stdout'
   expect_stderr_empty 'read (concealed custom field by ID)'
 
-  # Email field with label "メール"
+  # Email field with a Japanese label
   run_cmd read "op://Test/ExistedItem/dda2rh22hpiy7s6xtpxgbi5bam"
   expect_exit_code 0 'read (email custom field by ID)'
   expect_stdout_equals_redacted 'test@example.com' 'read (email custom field by ID) stdout'
