@@ -25,6 +25,7 @@ STDERR=''
 TRACES=''
 STDOUT_TMP=$(mktemp)
 STDERR_TMP=$(mktemp)
+TRACES_TMP=$(mktemp)
 CMD_TIMEOUT_SEC=10
 JAEGER_PID=''
 USE_DOCKER_JAEGER=false
@@ -36,7 +37,7 @@ USE_DOCKER_JAEGER=false
 # Clean up test keychain, temp files, and Jaeger on exit
 cleanup() {
   security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
-  rm -f "$STDOUT_TMP" "$STDERR_TMP"
+  rm -f "$STDOUT_TMP" "$STDERR_TMP" "$TRACES_TMP"
   if $USE_DOCKER_JAEGER; then
     make down 2>/dev/null &
   elif [ -n "$JAEGER_PID" ]; then
@@ -222,14 +223,85 @@ wait_for_jaeger() {
   done
 }
 
+#
+# Get a timestamp with microseconds for API v3 queries
+#
+trace_timestamp() {
+  perl -MPOSIX=strftime -MTime::HiRes=gettimeofday -e '
+    my ($sec, $usec) = gettimeofday;
+    printf "%s.%06dZ\n", strftime("%Y-%m-%dT%H:%M:%S", gmtime($sec)), $usec;
+  '
+}
+
+#
+# Wait up to 10 seconds for spans from API v3
+#
+wait_for_traces() {
+  local start_time="$1"
+  shift
+  local deadline=$((SECONDS + 10))
+  local http_status actual expected found
+  TRACES=''
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if ! http_status=$(curl -sS --max-time 2 --output "$TRACES_TMP" --write-out '%{http_code}' \
+      --get "${JAEGER_UI}/api/v3/traces" \
+      --data-urlencode 'query.serviceName=op-vault' \
+      --data-urlencode "query.startTimeMin=$start_time" \
+      --data-urlencode "query.startTimeMax=$(trace_timestamp)" \
+      --data-urlencode 'query.searchDepth=5'); then
+      _fail 'failed to query Jaeger API v3'
+      return 1
+    fi
+
+    case "$http_status" in
+    200)
+      if ! actual=$(jq -r '.result.resourceSpans[].scopeSpans[].spans[].name' "$TRACES_TMP"); then
+        _fail 'invalid Jaeger API v3 trace response'
+        return 1
+      fi
+      found=true
+      for expected in "$@"; do
+        if ! printf '%s\n' "$actual" | grep -qxF "$expected"; then
+          found=false
+          break
+        fi
+      done
+      if $found; then
+        TRACES=$(cat "$TRACES_TMP")
+        return 0
+      fi
+      ;;
+    404)
+      # Retry if no traces are saved yet. Fail for other 404 errors.
+      if ! jq -e '.error.message == "No traces found"' "$TRACES_TMP" >/dev/null 2>&1; then
+        _fail "Jaeger API v3 returned HTTP 404: $(head -1 "$TRACES_TMP")"
+        return 1
+      fi
+      ;;
+    *)
+      _fail "Jaeger API v3 returned HTTP $http_status: $(head -1 "$TRACES_TMP")"
+      return 1
+      ;;
+    esac
+    sleep 0.2
+  done
+
+  _fail "timed out waiting for Jaeger API v3 spans: $*"
+  return 1
+}
+
+#
+# Check that the span name matches exactly
+#
 expect_span_name() {
   local expected="$1" desc="$2"
   local actual
-  actual=$(printf '%s' "$TRACES" | jq -r '.data[].spans[].operationName' 2>/dev/null)
-  if printf '%s' "$actual" | grep -qF "$expected"; then
-    _pass "span operationName == '$expected'  $desc"
+  actual=$(printf '%s' "$TRACES" | jq -r '.result.resourceSpans[].scopeSpans[].spans[].name' 2>/dev/null)
+  if printf '%s\n' "$actual" | grep -qxF "$expected"; then
+    _pass "span name == '$expected'  $desc"
   else
-    _fail "span operationName != '$expected'  $desc  (actual: $(printf '%s' "$actual" | tr '\n' ' '))"
+    _fail "span name != '$expected'  $desc  (actual: $(printf '%s' "$actual" | tr '\n' ' '))"
   fi
 }
 
@@ -257,14 +329,17 @@ expect_file_not_exists() {
   fi
 }
 
+#
+# Check the OTLP error status of the main span
+#
 expect_span_status_error() {
   local desc="$1"
   local actual
-  actual=$(printf '%s' "$TRACES" | jq -r '.data[].spans[].tags[] | select(.key == "otel.status_code") | .value' 2>/dev/null)
-  if printf '%s' "$actual" | grep -qF 'ERROR'; then
-    _pass "span otel.status_code == 'ERROR'  $desc"
+  actual=$(printf '%s' "$TRACES" | jq -r '.result.resourceSpans[].scopeSpans[].spans[] | select(.name == "main") | .status.code // 0' 2>/dev/null)
+  if printf '%s\n' "$actual" | grep -qxF '2'; then
+    _pass "span status.code == 2 (ERROR)  $desc"
   else
-    _fail "span otel.status_code != 'ERROR'  $desc  (actual: $(printf '%s' "$actual" | head -1))"
+    _fail "span status.code != 2 (ERROR)  $desc  (actual: $(printf '%s' "$actual" | head -1))"
   fi
 }
 
@@ -387,13 +462,12 @@ expect_stderr_empty 'version --help'
 #
 echo ''
 echo '=== version with OTLP ==='
-START_US=$(($(date +%s) * 1000000))
+START_TIME=$(trace_timestamp)
 run_cmd_otlp version
 expect_exit_code 0 'version with OTLP'
 expect_stdout_matches '^[0-9]+\.[0-9]+\.[0-9]+$' 'version stdout matches x.y.z with OTLP'
 expect_stderr_empty 'version with OTLP'
-sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
+wait_for_traces "$START_TIME" version main
 expect_span_name 'version' 'version span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
@@ -412,12 +486,11 @@ expect_stderr_contains 'error:' 'unknown sub command'
 #
 echo ''
 echo '=== Unknown sub command with OTLP ==='
-START_US=$(($(date +%s) * 1000000))
+START_TIME=$(trace_timestamp)
 run_cmd_otlp unknown
 expect_exit_code 2 'unknown sub command with OTLP'
 expect_stdout_empty 'unknown sub command with OTLP'
-sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
+wait_for_traces "$START_TIME" main
 expect_span_name 'main' 'main span received by Jaeger'
 expect_span_status_error 'main span has error status'
 
@@ -481,13 +554,12 @@ expect_file_exists "$KEYCHAIN_PATH" 'init empty password creates keychain file'
 echo ''
 echo '=== init with OTLP ==='
 security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
-START_US=$(($(date +%s) * 1000000))
+START_TIME=$(trace_timestamp)
 run_cmd_stdin_otlp 'testpass' init
 expect_exit_code 0 'init with OTLP'
 expect_stdout_empty 'init with OTLP'
 expect_stderr_contains "Initialized $KEYCHAIN_PATH" 'init with OTLP'
-sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
+wait_for_traces "$START_TIME" init main
 expect_span_name 'init' 'init span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
@@ -545,15 +617,14 @@ security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
 run_cmd_stdin '' init
 expect_exit_code 0 'reset: precondition init'
 # When
-START_US=$(($(date +%s) * 1000000))
+START_TIME=$(trace_timestamp)
 run_cmd_otlp reset
 # Then
 expect_exit_code 0 'reset with OTLP'
 expect_stdout_empty 'reset with OTLP'
 expect_stderr_contains "deleted: $TEST_CHAIN" 'reset with OTLP deletes keychain'
 expect_file_not_exists "$KEYCHAIN_PATH" 'reset removes keychain file'
-sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
+wait_for_traces "$START_TIME" reset main
 expect_span_name 'reset' 'reset span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
@@ -634,15 +705,14 @@ expect_exit_code 0 'clear with OTLP: precondition init'
 run_cmd set "op://Test/ClearItem/password" "v"
 expect_exit_code 0 'clear with OTLP: precondition set'
 # When
-START_US=$(($(date +%s) * 1000000))
+START_TIME=$(trace_timestamp)
 run_cmd_otlp clear
 # Then
 expect_exit_code 0 'clear with OTLP'
 expect_stdout_empty 'clear with OTLP'
 expect_stderr_contains "cleared: $TEST_CHAIN" 'clear with OTLP output'
 expect_file_exists "$KEYCHAIN_PATH" 'clear with OTLP does not delete keychain file'
-sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
+wait_for_traces "$START_TIME" clear main
 expect_span_name 'clear' 'clear span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
@@ -741,14 +811,13 @@ security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
 run_cmd_stdin '' init
 expect_exit_code 0 'set with OTLP: precondition init'
 # When
-START_US=$(($(date +%s) * 1000000))
+START_TIME=$(trace_timestamp)
 run_cmd_otlp set "op://Test/SetItem/password" "set-secret"
 # Then
 expect_exit_code 0 'set with OTLP'
 expect_stdout_empty 'set with OTLP'
 expect_stderr_contains 'cached: op://Test/SetItem/password' 'set with OTLP output'
-sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
+wait_for_traces "$START_TIME" set main
 expect_span_name 'set' 'set span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
@@ -929,19 +998,19 @@ else
   run_cmd_stdin '' init
   expect_exit_code 0 'read custom fields by ID: precondition init'
 
-  # Address field with label "住所"
+  # Address field with a Japanese label
   run_cmd read "op://Test/ExistedItem/mr7ri2myeosr5ksggtsraaofze"
   expect_exit_code 0 'read (address custom field by ID)'
   expect_stdout_equals_redacted '住所123' 'read (address custom field by ID) stdout'
   expect_stderr_empty 'read (address custom field by ID)'
 
-  # Concealed field with label "パスワード". Do not print its expected or actual value.
+  # Concealed field with a Japanese label. Keep its value out of the output.
   run_cmd read "op://Test/ExistedItem/y76dnlsmu3ikzl6ipdxgpc32aa"
   expect_exit_code 0 'read (concealed custom field by ID)'
   expect_stdout_not_empty 'read (concealed custom field by ID) stdout'
   expect_stderr_empty 'read (concealed custom field by ID)'
 
-  # Email field with label "メール"
+  # Email field with a Japanese label
   run_cmd read "op://Test/ExistedItem/dda2rh22hpiy7s6xtpxgbi5bam"
   expect_exit_code 0 'read (email custom field by ID)'
   expect_stdout_equals_redacted 'test@example.com' 'read (email custom field by ID) stdout'
@@ -996,14 +1065,13 @@ expect_exit_code 0 'read with OTLP: precondition init'
 run_cmd set "op://Test/MyItem/password" "supersecret"
 expect_exit_code 0 'read with OTLP: precondition set'
 # When
-START_US=$(($(date +%s) * 1000000))
+START_TIME=$(trace_timestamp)
 run_cmd_otlp read "op://Test/MyItem/password"
 # Then
 expect_exit_code 0 'read with OTLP'
 expect_stdout_contains 'supersecret' 'read with OTLP stdout'
 expect_stderr_empty 'read with OTLP'
-sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
+wait_for_traces "$START_TIME" read main
 expect_span_name 'read' 'read span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
@@ -1179,14 +1247,13 @@ expect_exit_code 0 'refresh with OTLP: precondition init'
 run_cmd set "op://Test/RefreshItem/password" "v"
 expect_exit_code 0 'refresh with OTLP: precondition set'
 # When: 1Password lookup returns not found (dummy account) but exit 0
-START_US=$(($(date +%s) * 1000000))
+START_TIME=$(trace_timestamp)
 run_cmd_otlp refresh
 # Then
 expect_exit_code 0 'refresh with OTLP'
 expect_stdout_contains 'NAME' 'refresh with OTLP has NAME header'
 expect_stderr_empty 'refresh with OTLP'
-sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
+wait_for_traces "$START_TIME" refresh main
 expect_span_name 'refresh' 'refresh span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
@@ -1449,14 +1516,13 @@ security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
 run_cmd_stdin 'testpass' init
 expect_exit_code 0 'status with OTLP: precondition init'
 # When
-START_US=$(($(date +%s) * 1000000))
+START_TIME=$(trace_timestamp)
 run_cmd_otlp status
 # Then
 expect_exit_code 0 'status with OTLP'
 expect_stdout_contains 'status: unlocked' 'status with OTLP output'
 expect_stderr_empty 'status with OTLP'
-sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
+wait_for_traces "$START_TIME" status main
 expect_span_name 'status' 'status span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
@@ -1486,13 +1552,12 @@ expect_stderr_empty 'docs'
 #
 echo ''
 echo '=== docs with OTLP ==='
-START_US=$(($(date +%s) * 1000000))
+START_TIME=$(trace_timestamp)
 run_cmd_otlp docs
 expect_exit_code 0 'docs with OTLP'
 expect_stdout_contains 'op-vault' 'docs with OTLP stdout'
 expect_stderr_empty 'docs with OTLP'
-sleep 1
-TRACES=$(curl -s "${JAEGER_UI}/api/traces?service=op-vault&start=${START_US}&limit=5")
+wait_for_traces "$START_TIME" docs main
 expect_span_name 'docs' 'docs span received by Jaeger'
 expect_span_name 'main' 'main span received by Jaeger'
 
